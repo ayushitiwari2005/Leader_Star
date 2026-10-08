@@ -91,14 +91,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "BIZZNNOVATE — Live Leaderboard" },
       {
         property: "og:description",
-        content:
-          "Real-time rankings for the BIZZNNOVATE business competition at IIPS, DAVV.",
+        content: "Real-time rankings for the BIZZNNOVATE business competition at IIPS, DAVV.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/emblem.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

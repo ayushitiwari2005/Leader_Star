@@ -25,7 +25,10 @@ async function names(supabase: Sb, teamId: string, activityId: string) {
     supabase.from("teams").select("name").eq("id", teamId).maybeSingle(),
     supabase.from("activities").select("name").eq("id", activityId).maybeSingle(),
   ]);
-  return { team_name: t.data?.name ?? "Unknown team", activity_name: a.data?.name ?? "Unknown activity" };
+  return {
+    team_name: t.data?.name ?? "Unknown team",
+    activity_name: a.data?.name ?? "Unknown activity",
+  };
 }
 
 async function logScore(
@@ -46,7 +49,10 @@ async function logScore(
     entity_type: "score",
     entity_id: scoreId,
     old_value: oldPoints === null ? null : { ...base, points: oldPoints },
-    new_value: newPoints === null ? { ...base, points: null, ...extra } : { ...base, points: newPoints, ...extra },
+    new_value:
+      newPoints === null
+        ? { ...base, points: null, ...extra }
+        : { ...base, points: newPoints, ...extra },
     performed_by: userId,
   });
 }
@@ -62,12 +68,18 @@ async function writeScore(
   expectedVersion: number,
   remarks?: string,
 ) {
-  const { data: activity } = await supabase.from("activities").select("*").eq("id", activityId).maybeSingle();
+  const { data: activity } = await supabase
+    .from("activities")
+    .select("*")
+    .eq("id", activityId)
+    .maybeSingle();
   if (!activity) throw new Error("This activity no longer exists.");
-  if (activity.status === "disabled") throw new Error("This activity is disabled. Enable it before scoring.");
+  if (activity.status === "disabled")
+    throw new Error("This activity is disabled. Enable it before scoring.");
   if (points !== null) {
     if (points < 0) throw new Error("Score cannot be negative.");
-    if (points > activity.max_score) throw new Error(`Score cannot exceed the maximum of ${activity.max_score}.`);
+    if (points > activity.max_score)
+      throw new Error(`Score cannot exceed the maximum of ${activity.max_score}.`);
   }
   const { data: team } = await supabase.from("teams").select("id").eq("id", teamId).maybeSingle();
   if (!team) throw new Error("This team no longer exists.");
@@ -116,7 +128,13 @@ async function writeScore(
 
   const { data: inserted, error } = await supabase
     .from("scores")
-    .insert({ team_id: teamId, activity_id: activityId, points, remarks: remarks ?? null, entered_by: userId })
+    .insert({
+      team_id: teamId,
+      activity_id: activityId,
+      points,
+      remarks: remarks ?? null,
+      entered_by: userId,
+    })
     .select()
     .single();
   if (error) {
@@ -139,7 +157,7 @@ export const getMyRole = createServerFn({ method: "GET" })
 /* ---------------- Scores ---------------- */
 
 export const upsertScore = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
+  .validator((data) =>
     z
       .object({
         teamId: z.string().uuid(),
@@ -155,40 +173,89 @@ export const upsertScore = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const role = await assertAdmin(supabase, userId);
     const { existing, score } = await writeScore(
-      supabase, userId, role, data.teamId, data.activityId, data.points, data.expectedVersion, data.remarks,
+      supabase,
+      userId,
+      role,
+      data.teamId,
+      data.activityId,
+      data.points,
+      data.expectedVersion,
+      data.remarks,
     );
-    if (existing && existing.points === data.points) return { score, previous: existing.points, unchanged: true };
+    if (existing && existing.points === data.points)
+      return { score, previous: existing.points, unchanged: true };
     await logScore(
-      supabase, userId, existing ? "score_update" : "score_create", score!.id,
-      data.teamId, data.activityId, existing?.points ?? null, data.points,
+      supabase,
+      userId,
+      existing ? "score_update" : "score_create",
+      score!.id,
+      data.teamId,
+      data.activityId,
+      existing?.points ?? null,
+      data.points,
     );
     return { score, previous: existing?.points ?? null, unchanged: false };
   });
 
 export const deleteScore = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
-    z.object({ teamId: z.string().uuid(), activityId: z.string().uuid(), expectedVersion: z.number().int().min(1) }).parse(data),
+  .validator((data) =>
+    z
+      .object({
+        teamId: z.string().uuid(),
+        activityId: z.string().uuid(),
+        expectedVersion: z.number().int().min(1),
+      })
+      .parse(data),
   )
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     const role = await assertAdmin(supabase, userId);
-    const { existing } = await writeScore(supabase, userId, role, data.teamId, data.activityId, null, data.expectedVersion);
-    await logScore(supabase, userId, "score_delete", existing!.id, data.teamId, data.activityId, existing!.points, null);
+    const { existing } = await writeScore(
+      supabase,
+      userId,
+      role,
+      data.teamId,
+      data.activityId,
+      null,
+      data.expectedVersion,
+    );
+    await logScore(
+      supabase,
+      userId,
+      "score_delete",
+      existing!.id,
+      data.teamId,
+      data.activityId,
+      existing!.points,
+      null,
+    );
     return { ok: true };
   });
 
 /** Reverts one history entry: restores the "previous" value, provided the score hasn't changed since. */
 export const rollbackScore = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ logId: z.string().uuid() }).parse(data))
+  .validator((data) => z.object({ logId: z.string().uuid() }).parse(data))
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     const role = await assertAdmin(supabase, userId);
-    const { data: log } = await supabase.from("audit_logs").select("*").eq("id", data.logId).maybeSingle();
+    const { data: log } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("id", data.logId)
+      .maybeSingle();
     if (!log || log.entity_type !== "score") throw new Error("History entry not found.");
-    const oldV = (log.old_value ?? null) as { team_id?: string; activity_id?: string; points?: number | null } | null;
-    const newV = (log.new_value ?? null) as { team_id?: string; activity_id?: string; points?: number | null } | null;
+    const oldV = (log.old_value ?? null) as {
+      team_id?: string;
+      activity_id?: string;
+      points?: number | null;
+    } | null;
+    const newV = (log.new_value ?? null) as {
+      team_id?: string;
+      activity_id?: string;
+      points?: number | null;
+    } | null;
     const teamId = newV?.team_id ?? oldV?.team_id;
     const activityId = newV?.activity_id ?? oldV?.activity_id;
     if (!teamId || !activityId) throw new Error("This older history entry cannot be rolled back.");
@@ -196,9 +263,16 @@ export const rollbackScore = createServerFn({ method: "POST" })
     const expectedNow = newV?.points ?? null; // value the change produced
 
     const { data: current } = await supabase
-      .from("scores").select("*").eq("team_id", teamId).eq("activity_id", activityId).maybeSingle();
+      .from("scores")
+      .select("*")
+      .eq("team_id", teamId)
+      .eq("activity_id", activityId)
+      .maybeSingle();
     const currentPoints = current ? Number(current.points) : null;
-    if ((currentPoints === null ? null : currentPoints) !== (expectedNow === null ? null : Number(expectedNow))) {
+    if (
+      (currentPoints === null ? null : currentPoints) !==
+      (expectedNow === null ? null : Number(expectedNow))
+    ) {
       throw new Error(
         "This score has changed since that entry. Roll back the most recent change for this team and activity instead.",
       );
@@ -206,11 +280,23 @@ export const rollbackScore = createServerFn({ method: "POST" })
     if (target === null && !current) throw new Error("Nothing to roll back.");
 
     const { existing, score } = await writeScore(
-      supabase, userId, role, teamId, activityId, target === null ? null : Number(target), current?.version ?? 0,
+      supabase,
+      userId,
+      role,
+      teamId,
+      activityId,
+      target === null ? null : Number(target),
+      current?.version ?? 0,
     );
     await logScore(
-      supabase, userId, "score_rollback", score?.id ?? existing?.id ?? log.entity_id ?? "",
-      teamId, activityId, existing?.points ?? null, target === null ? null : Number(target),
+      supabase,
+      userId,
+      "score_rollback",
+      score?.id ?? existing?.id ?? log.entity_id ?? "",
+      teamId,
+      activityId,
+      existing?.points ?? null,
+      target === null ? null : Number(target),
       { rolled_back_log: log.id },
     );
     return { ok: true, restored: target };
@@ -255,7 +341,7 @@ async function assertUniqueName(supabase: Sb, name: string, exceptId?: string) {
 const teamName = z.string().trim().min(1, "Team name is required.").max(100);
 
 export const createTeam = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ name: teamName }).parse(data))
+  .validator((data) => z.object({ name: teamName }).parse(data))
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
@@ -267,52 +353,75 @@ export const createTeam = createServerFn({ method: "POST" })
       return Number.isFinite(n) && n > m ? n : m;
     }, 0);
     const code = `T${String(max + 1).padStart(2, "0")}`;
-    const { data: team, error } = await supabase.from("teams").insert({ name: data.name, team_code: code }).select().single();
+    const { data: team, error } = await supabase
+      .from("teams")
+      .insert({ name: data.name, team_code: code })
+      .select()
+      .single();
     if (error) {
       if (error.code === "23505") throw new Error(`A team named "${data.name}" already exists.`);
       throw new Error(error.message);
     }
     await supabase.from("audit_logs").insert({
-      action: "team_create", entity_type: "team", entity_id: team.id,
-      old_value: null, new_value: { name: data.name, team_code: code }, performed_by: userId,
+      action: "team_create",
+      entity_type: "team",
+      entity_id: team.id,
+      old_value: null,
+      new_value: { name: data.name, team_code: code },
+      performed_by: userId,
     });
     return { team };
   });
 
 export const renameTeam = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.string().uuid(), name: teamName }).parse(data))
+  .validator((data) => z.object({ id: z.string().uuid(), name: teamName }).parse(data))
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
     await assertUniqueName(supabase, data.name, data.id);
     const { data: before } = await supabase.from("teams").select("name").eq("id", data.id).single();
-    const { error } = await supabase.from("teams").update({ name: data.name, updated_at: new Date().toISOString() }).eq("id", data.id);
+    const { error } = await supabase
+      .from("teams")
+      .update({ name: data.name, updated_at: new Date().toISOString() })
+      .eq("id", data.id);
     if (error) {
       if (error.code === "23505") throw new Error(`A team named "${data.name}" already exists.`);
       throw new Error(error.message);
     }
     await supabase.from("audit_logs").insert({
-      action: "team_rename", entity_type: "team", entity_id: data.id,
-      old_value: before ? { name: before.name } : null, new_value: { name: data.name }, performed_by: userId,
+      action: "team_rename",
+      entity_type: "team",
+      entity_id: data.id,
+      old_value: before ? { name: before.name } : null,
+      new_value: { name: data.name },
+      performed_by: userId,
     });
     return { ok: true };
   });
 
 export const deleteTeam = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .validator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     await assertAdmin(supabase, userId);
     const { data: before } = await supabase.from("teams").select("*").eq("id", data.id).single();
-    const { count } = await supabase.from("scores").select("id", { count: "exact", head: true }).eq("team_id", data.id);
+    const { count } = await supabase
+      .from("scores")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", data.id);
     const { error } = await supabase.from("teams").delete().eq("id", data.id); // scores cascade
     if (error) throw new Error(error.message);
     await supabase.from("audit_logs").insert({
-      action: "team_delete", entity_type: "team", entity_id: data.id,
-      old_value: before ? { name: before.name, team_code: before.team_code, scores_removed: count ?? 0 } : null,
-      new_value: null, performed_by: userId,
+      action: "team_delete",
+      entity_type: "team",
+      entity_id: data.id,
+      old_value: before
+        ? { name: before.name, team_code: before.team_code, scores_removed: count ?? 0 }
+        : null,
+      new_value: null,
+      performed_by: userId,
     });
     return { ok: true };
   });
@@ -322,11 +431,13 @@ export const deleteTeam = createServerFn({ method: "POST" })
 const activityStatus = z.enum(["upcoming", "live", "completed", "disabled"]);
 
 export const createActivity = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
-    z.object({
-      name: z.string().trim().min(1, "Activity name is required.").max(100),
-      maxScore: z.number().int().min(1, "Maximum score must be at least 1.").max(100000),
-    }).parse(data),
+  .validator((data) =>
+    z
+      .object({
+        name: z.string().trim().min(1, "Activity name is required.").max(100),
+        maxScore: z.number().int().min(1, "Maximum score must be at least 1.").max(100000),
+      })
+      .parse(data),
   )
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
@@ -338,39 +449,68 @@ export const createActivity = createServerFn({ method: "POST" })
     const nextOrder = Math.max(0, ...(all ?? []).map((a) => a.sort_order)) + 1;
     const { data: act, error } = await supabase
       .from("activities")
-      .insert({ name: data.name, max_score: data.maxScore, sort_order: nextOrder, status: "upcoming" })
-      .select().single();
-    if (error) throw new Error(error.code === "23505" ? `An activity named "${data.name}" already exists.` : error.message);
+      .insert({
+        name: data.name,
+        max_score: data.maxScore,
+        sort_order: nextOrder,
+        status: "upcoming",
+      })
+      .select()
+      .single();
+    if (error)
+      throw new Error(
+        error.code === "23505" ? `An activity named "${data.name}" already exists.` : error.message,
+      );
     await supabase.from("audit_logs").insert({
-      action: "activity_create", entity_type: "activity", entity_id: act.id,
-      old_value: null, new_value: { name: data.name, max_score: data.maxScore }, performed_by: userId,
+      action: "activity_create",
+      entity_type: "activity",
+      entity_id: act.id,
+      old_value: null,
+      new_value: { name: data.name, max_score: data.maxScore },
+      performed_by: userId,
     });
     return { activity: act };
   });
 
 export const updateActivity = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
-    z.object({
-      id: z.string().uuid(),
-      name: z.string().trim().min(1).max(100).optional(),
-      status: activityStatus.optional(),
-      maxScore: z.number().int().min(1).max(100000).optional(),
-      weight: z.number().min(0).optional(),
-    }).parse(data),
+  .validator((data) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().trim().min(1).max(100).optional(),
+        status: activityStatus.optional(),
+        maxScore: z.number().int().min(1).max(100000).optional(),
+        weight: z.number().min(0).optional(),
+      })
+      .parse(data),
   )
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     const role = await assertAdmin(supabase, userId);
-    const { data: before } = await supabase.from("activities").select("*").eq("id", data.id).single();
+    const { data: before } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("id", data.id)
+      .single();
     if (!before) throw new Error("Activity not found.");
     if (data.maxScore !== undefined) {
-      const { data: over } = await supabase.from("scores").select("id").eq("activity_id", data.id).gt("points", data.maxScore).limit(1);
-      if (over?.length) throw new Error("Some teams already scored above that maximum. Lower their scores first.");
+      const { data: over } = await supabase
+        .from("scores")
+        .select("id")
+        .eq("activity_id", data.id)
+        .gt("points", data.maxScore)
+        .limit(1);
+      if (over?.length)
+        throw new Error("Some teams already scored above that maximum. Lower their scores first.");
     }
     if (data.name) {
       const { data: all } = await supabase.from("activities").select("id, name");
-      if ((all ?? []).some((a) => a.id !== data.id && a.name.trim().toLowerCase() === data.name!.toLowerCase()))
+      if (
+        (all ?? []).some(
+          (a) => a.id !== data.id && a.name.trim().toLowerCase() === data.name!.toLowerCase(),
+        )
+      )
         throw new Error(`An activity named "${data.name}" already exists.`);
     }
     const patch: { name?: string; status?: string; max_score?: number; weight?: number } = {};
@@ -381,29 +521,46 @@ export const updateActivity = createServerFn({ method: "POST" })
     const { error } = await supabase.from("activities").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     await supabase.from("audit_logs").insert({
-      action: "activity_update", entity_type: "activity", entity_id: data.id,
-      old_value: { name: before.name, status: before.status, max_score: before.max_score, weight: before.weight },
-      new_value: JSON.parse(JSON.stringify(patch)), performed_by: userId,
+      action: "activity_update",
+      entity_type: "activity",
+      entity_id: data.id,
+      old_value: {
+        name: before.name,
+        status: before.status,
+        max_score: before.max_score,
+        weight: before.weight,
+      },
+      new_value: JSON.parse(JSON.stringify(patch)),
+      performed_by: userId,
     });
     return { ok: true };
   });
 
 export const deleteActivity = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .validator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
     const role = await assertAdmin(supabase, userId);
-    const { data: before } = await supabase.from("activities").select("*").eq("id", data.id).single();
+    const { data: before } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("id", data.id)
+      .single();
     if (!before) throw new Error("Activity not found.");
-    const { count } = await supabase.from("scores").select("id", { count: "exact", head: true }).eq("activity_id", data.id);
+    const { count } = await supabase
+      .from("scores")
+      .select("id", { count: "exact", head: true })
+      .eq("activity_id", data.id);
     const { error } = await supabase.from("activities").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     await supabase.from("audit_logs").insert({
-      action: "activity_delete", entity_type: "activity", entity_id: data.id,
+      action: "activity_delete",
+      entity_type: "activity",
+      entity_id: data.id,
       old_value: { name: before.name, max_score: before.max_score, scores_removed: count ?? 0 },
-      new_value: null, performed_by: userId,
+      new_value: null,
+      performed_by: userId,
     });
     return { ok: true };
   });
-

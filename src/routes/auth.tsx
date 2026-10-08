@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyRole } from "@/lib/admin.functions";
-const emblem = "/logo.jpeg" ;
-const wordmark = "/logo.jpeg" ;
+const emblem = "/emblem.svg";
+const wordmark = "/wordmark.svg";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,15 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Admin Sign In — BIZZNNOVATE" },
-      { name: "description", content: "Judge and admin sign-in for the BIZZNNOVATE live leaderboard." },
+      {
+        name: "description",
+        content: "Judge and admin sign-in for the BIZZNNOVATE live leaderboard.",
+      },
       { property: "og:title", content: "Admin Sign In — BIZZNNOVATE" },
-      { property: "og:description", content: "Judge and admin sign-in for the BIZZNNOVATE live leaderboard." },
+      {
+        property: "og:description",
+        content: "Judge and admin sign-in for the BIZZNNOVATE live leaderboard.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -60,23 +66,32 @@ function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 font-sans text-foreground">
-      <div className="glass relative w-full max-w-sm border border-line/50 p-8 shadow-[5px_6px_0_#a4774b33]">
+    <div className="flex min-h-screen items-center justify-center p-4 font-sans text-foreground">
+      <div className="glass relative w-full max-w-sm border border-line/50 p-6 sm:p-8 shadow-[5px_6px_0_#a4774b33]">
         <div className="flex items-center gap-3">
           <img
             src={emblem}
             alt="BIZZNNOVATE emblem"
-            className="size-12 object-contain"
+            className="size-11 sm:size-12 shrink-0 object-contain"
           />
-          <div>
-            <img src={wordmark} alt="BIZZNNOVATE" className="w-44 object-contain" />
-            <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">Admin Console</div>
+          <div className="min-w-0">
+            <img
+              src={wordmark}
+              alt="BIZZNNOVATE"
+              className="w-36 sm:w-44 object-contain object-left"
+            />
+            <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+              Admin Console
+            </div>
           </div>
         </div>
 
         <form onSubmit={submit} className="mt-8 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <Label
+              htmlFor="email"
+              className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
+            >
               Email
             </Label>
             <Input
@@ -90,7 +105,10 @@ function AuthPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <Label
+              htmlFor="password"
+              className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground"
+            >
               Password
             </Label>
             <Input
@@ -104,7 +122,11 @@ function AuthPage() {
               placeholder="••••••••"
             />
           </div>
-          <Button type="submit" disabled={busy} className="w-full bg-primary font-mono text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground hover:bg-primary/90">
+          <Button
+            type="submit"
+            disabled={busy}
+            className="w-full bg-primary font-mono text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground hover:bg-primary/90"
+          >
             {busy ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
           </Button>
         </form>

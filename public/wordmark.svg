@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 80" width="100%" height="100%">
+  <defs>
+    <linearGradient id="wordmarkGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#dfb96c" />
+      <stop offset="25%" stop-color="#b8832a" />
+      <stop offset="60%" stop-color="#d6a74b" />
+      <stop offset="100%" stop-color="#916016" />
+    </linearGradient>
+    <filter id="wmShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <style>
+    .wordmark-text {
+      font-family: 'Cinzel', 'Playfair Display', 'Times New Roman', serif;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      fill: url(#wordmarkGold);
+      font-size: 52px;
+    }
+  </style>
+
+  <text x="10" y="58" class="wordmark-text" filter="url(#wmShadow)">BIZZNNOVATE</text>
+</svg>

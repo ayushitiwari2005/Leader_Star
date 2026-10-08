@@ -115,7 +115,7 @@
 
   body {
     background-color: var(--color-background);
-    background-image: url('/__l5e/assets-v1/2e116fdf-b672-4550-9554-5f83f52d9c25/grain-light.webp');
+    background-image: url("/grain-texture.svg");
     background-repeat: repeat;
     color: var(--color-foreground);
     font-family: var(--font-sans);
@@ -148,25 +148,73 @@
 }
 
 @keyframes breathe {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 40%, transparent); }
-  50% { opacity: 0.55; box-shadow: 0 0 0 6px transparent; }
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px transparent;
+  }
 }
 
 @keyframes pulseRow {
-  0% { background-color: color-mix(in oklab, var(--primary) 18%, transparent); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes sweep {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(320%); }
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@utility animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+
+@utility animate-marquee-hover-pause {
+  &:hover {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .live-dot, .pulse-row, .slide-in, .sweep { animation: none; }
+  .live-dot,
+  .pulse-row,
+  .slide-in,
+  .sweep,
+  .animate-marquee {
+    animation: none;
+  }
 }

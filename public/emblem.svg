@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Premium Metallic Gold Gradient -->
+    <radialGradient id="goldRadial" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#fae7a5" />
+      <stop offset="35%" stop-color="#e8be63" />
+      <stop offset="70%" stop-color="#c99539" />
+      <stop offset="100%" stop-color="#9a6e22" />
+    </radialGradient>
+
+    <!-- Subtle Bevel Gradient -->
+    <linearGradient id="ringBevel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a5736" />
+      <stop offset="50%" stop-color="#14361e" />
+      <stop offset="100%" stop-color="#0a1f11" />
+    </linearGradient>
+
+    <linearGradient id="goldTrim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fdf1c5" />
+      <stop offset="50%" stop-color="#d4a347" />
+      <stop offset="100%" stop-color="#8c611a" />
+    </linearGradient>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Outer Dark Green Border Ring -->
+  <circle cx="250" cy="250" r="240" fill="#153920" stroke="url(#goldTrim)" stroke-width="4" />
+  
+  <!-- Outer Gold Rim -->
+  <circle cx="250" cy="250" r="226" fill="url(#goldRadial)" stroke="#153920" stroke-width="8" />
+
+  <!-- Center Triskelion Dark Green Flow Dividing the 3 Sectors -->
+  <!-- Center spiral core -->
+  <g fill="#14361e">
+    <!-- Center spiral / triskelion arms connecting to the outer ring -->
+    <path d="M 250 250 
+             C 285 240, 310 200, 315 150 
+             C 318 110, 305 60, 275 30 
+             C 295 40, 325 80, 325 130 
+             C 325 185, 290 230, 255 252 
+             Z" />
+             
+    <path d="M 250 250 
+             C 235 285, 200 315, 145 325 
+             C 95 332, 45 305, 26 270 
+             C 45 298, 90 338, 140 335 
+             C 195 330, 235 290, 248 255 
+             Z" />
+
+    <path d="M 250 250 
+             C 230 220, 240 170, 260 120 
+             C 275 80, 260 45, 230 26 
+             C 215 50, 220 95, 215 140 
+             C 210 190, 230 230, 245 252 
+             Z" opacity="0.15"/>
+
+    <!-- Prominent Organic Dividing Sweeps -->
+    <!-- Arm 1: separating top & bottom-right -->
+    <path d="M 248 248 C 300 230, 360 250, 420 330 C 370 240, 310 215, 252 245 Z" />
+    <!-- Arm 2: separating top & bottom-left -->
+    <path d="M 248 248 C 210 200, 190 140, 185 35 C 170 120, 200 200, 246 250 Z" />
+    <!-- Arm 3: separating bottom-left & bottom-right -->
+    <path d="M 248 248 C 240 310, 220 380, 248 474 C 230 390, 232 315, 250 250 Z" />
+  </g>
+
+  <!-- ==================== SECTOR 1: TOP (FOOD & NUTRITION) ==================== -->
+  <g id="sector-food" fill="#14361e" filter="url(#softGlow)">
+    <!-- Apple Leaf -->
+    <path d="M 235 72 C 248 65, 258 72, 255 85 C 242 88, 232 82, 235 72 Z" />
+    <!-- Apple Stem -->
+    <path d="M 233 85 C 236 92, 234 98, 230 102 C 228 100, 230 92, 232 85 Z" />
+    <!-- Apple Body -->
+    <path d="M 230 102 
+             C 220 92, 202 94, 192 104 
+             C 178 118, 175 145, 186 168 
+             C 195 186, 215 192, 228 184 
+             C 233 181, 238 181, 244 185 
+             C 255 192, 274 185, 280 166 
+             C 289 144, 283 118, 268 104 
+             C 256 93, 240 94, 232 102 Z" />
+    <!-- Apple Highlight / indent -->
+    <path d="M 226 102 C 232 106, 238 106, 242 102 C 237 99, 231 99, 226 102 Z" fill="url(#goldRadial)" opacity="0.6"/>
+
+    <!-- Bowl of Nutrition / Grains (Right of apple) -->
+    <!-- Salad / Grains mound in bowl -->
+    <circle cx="295" cy="115" r="9" />
+    <circle cx="310" cy="108" r="8" />
+    <circle cx="325" cy="114" r="9" />
+    <circle cx="302" cy="125" r="8" />
+    <circle cx="318" cy="124" r="8.5" />
+    <circle cx="332" cy="122" r="7" />
+    <!-- Additional grain / leaf toppings -->
+    <path d="M 308 98 C 314 93, 322 96, 320 104 C 312 104, 307 101, 308 98 Z" />
+    <path d="M 326 102 C 333 98, 338 103, 336 109 C 328 108, 325 105, 326 102 Z" />
+    
+    <!-- Bowl -->
+    <path d="M 285 130 
+             Q 318 132 352 130 
+             C 350 155, 336 172, 318 174 
+             C 301 172, 287 155, 285 130 Z" />
+    <!-- Bowl Base / Rim -->
+    <ellipse cx="318" cy="130" rx="33" ry="5" fill="#14361e" />
+    <path d="M 308 173 L 328 173 L 331 178 L 305 178 Z" />
+  </g>
+
+  <!-- ==================== SECTOR 2: BOTTOM-LEFT (HEALTH & FITNESS) ==================== -->
+  <g id="sector-fitness" fill="#14361e" filter="url(#softGlow)">
+    <!-- Runner Head -->
+    <circle cx="218" cy="275" r="14" />
+    
+    <!-- Runner Torso & Limbs (Dynamic sprinting pose) -->
+    <!-- Torso -->
+    <path d="M 214 294 
+             L 226 318 
+             L 204 350 
+             L 194 344 
+             L 210 316 
+             L 200 298 Z" />
+             
+    <!-- Forward Arm (bent up forward) -->
+    <path d="M 206 300 
+             L 226 308 
+             L 236 332 
+             L 228 335 
+             L 220 316 
+             L 202 305 Z" />
+             
+    <!-- Back Arm (bent backward) -->
+    <path d="M 212 300 
+             L 182 308 
+             L 170 330 
+             L 162 325 
+             L 176 301 
+             L 208 295 Z" />
+             
+    <!-- Front Leg (leaping forward, bent at knee) -->
+    <path d="M 204 348 
+             L 228 365 
+             L 218 402 
+             L 208 400 
+             L 218 368 
+             L 198 353 Z" />
+             
+    <!-- Back Leg (extended backwards in sprint stride) -->
+    <path d="M 196 345 
+             L 172 370 
+             L 186 414 
+             L 177 417 
+             L 162 368 
+             L 190 338 Z" />
+  </g>
+
+  <!-- ==================== SECTOR 3: BOTTOM-RIGHT (FASHION & LIFESTYLE) ==================== -->
+  <g id="sector-fashion" fill="#14361e" filter="url(#softGlow)">
+    <!-- Elegant Wide-Brimmed Hat (canted gracefully) -->
+    <ellipse cx="290" cy="335" rx="55" ry="14" transform="rotate(-14 290 335)" />
+    <!-- Hat Crown -->
+    <path d="M 270 326 C 272 305, 305 300, 312 320 Z" />
+
+    <!-- Woman Profile Head & Face -->
+    <path d="M 288 338 
+             C 292 342, 298 348, 303 349 
+             C 305 352, 302 356, 300 358 
+             C 304 362, 305 366, 301 370 
+             C 298 373, 292 376, 288 382 
+             C 285 376, 282 368, 280 358 
+             Z" />
+
+    <!-- Elegant Hair Knot / Cascade -->
+    <path d="M 276 338 
+             C 268 348, 264 366, 268 380 
+             C 272 390, 275 398, 273 408 
+             C 268 395, 264 380, 266 360 
+             C 268 348, 272 340, 276 338 Z" />
+
+    <!-- Graceful Neck & High-Fashion Coat / Collar -->
+    <path d="M 285 380 
+             L 292 395 
+             L 305 385 
+             L 315 415 
+             C 310 435, 295 465, 272 475 
+             C 260 455, 255 425, 262 398 
+             L 276 388 Z" />
+
+    <!-- Coat Lapel / Shoulder Line -->
+    <path d="M 292 395 
+             C 300 405, 308 425, 306 450 
+             C 295 450, 286 438, 284 420 
+             Z" fill="#14361e" opacity="0.9" />
+  </g>
+
+  <!-- Inner Trim Accents -->
+  <circle cx="250" cy="250" r="226" fill="none" stroke="#fae7a5" stroke-width="2" opacity="0.6" />
+</svg>
