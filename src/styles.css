@@ -5,13 +5,14 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * BIZZNNOVATE reference design — warm paper, forest green, kraft and espresso.
+ * BIZZNNOVATE brand design system — crafted warm paper, forest green, kraft, ecru and espresso.
+ * Faithful to https://b-izz-web.vercel.app/
  */
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
@@ -49,15 +50,30 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  /* BIZZNNOVATE tokens */
-  --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-ink-3: var(--ink-3);
-  --color-ink-4: var(--ink-4);
-  --color-line: var(--line);
+
+  /* BIZZNNOVATE palette tokens from reference */
+  --color-forest-green: var(--forest-green);
+  --color-forest-dark: var(--forest-dark);
+  --color-sage: var(--sage);
+  --color-sage-tint: var(--sage-tint);
+  --color-kraft: var(--kraft);
+  --color-kraft-deep: var(--kraft-deep);
+  --color-kraft-light: var(--kraft-light);
+  --color-ecru: var(--ecru);
+  --color-ecru-light: var(--ecru-light);
+  --color-ecru-soft: var(--ecru-soft);
+  --color-espresso: var(--espresso);
+  --color-muted-text: var(--muted-text);
+
+  --color-ink: var(--ecru);
+  --color-ink-2: var(--ecru-light);
+  --color-ink-3: var(--ecru-soft);
+  --color-ink-4: var(--kraft-light);
+  --color-line: var(--kraft);
   --color-gold: var(--gold);
   --color-up: var(--up);
   --color-down: var(--down);
+
   --font-display: "Playfair Display", serif;
   --font-heading: "Cinzel", serif;
   --font-sans: "DM Sans", sans-serif;
@@ -66,46 +82,59 @@
 
 :root {
   --radius: 0.25rem;
-  --ink: #dbcfb8;
-  --ink-2: #ebe5d8;
-  --ink-3: #f4f1ea;
-  --ink-4: #c9b395;
-  --line: #a4774b;
-  --gold: #8c5a21;
+  --forest-green: #3b613a;
+  --forest-dark: #2f4e2e;
+  --sage: #758a6d;
+  --sage-tint: #bcbaa2;
+  --kraft: #a4774b;
+  --kraft-deep: #6e4f34;
+  --kraft-light: #c9b395;
+  --ecru: #dbcfb8;
+  --ecru-light: #ebe5d8;
+  --ecru-soft: #f4f1ea;
+  --espresso: #4a3525;
+  --muted-text: #604c3b;
+
   --up: #3b613a;
-  --down: #a44332;
-  --background: var(--ink);
-  --foreground: #4a3525;
-  --card: var(--ink-2);
-  --card-foreground: var(--foreground);
-  --popover: var(--ink-3);
-  --popover-foreground: var(--foreground);
-  --primary: #3b613a;
-  --primary-foreground: #f4f1ea;
-  --secondary: #bcbaa2;
-  --secondary-foreground: var(--foreground);
-  --muted: var(--ink-2);
-  --muted-foreground: #604c3b;
-  --accent: #bcbaa2;
-  --accent-foreground: var(--foreground);
+  --down: #b33927;
+  --gold: #8c5a21;
+
+  --background: var(--ecru);
+  --foreground: var(--espresso);
+  --card: var(--ecru-soft);
+  --card-foreground: var(--espresso);
+  --popover: var(--ecru-soft);
+  --popover-foreground: var(--espresso);
+  --primary: var(--forest-green);
+  --primary-foreground: var(--ecru-soft);
+  --secondary: var(--sage-tint);
+  --secondary-foreground: var(--espresso);
+  --muted: var(--ecru-light);
+  --muted-foreground: var(--muted-text);
+  --accent: var(--sage-tint);
+  --accent-foreground: var(--espresso);
   --destructive: var(--down);
-  --destructive-foreground: var(--ink-3);
-  --border: color-mix(in oklab, var(--line) 40%, transparent);
-  --input: color-mix(in oklab, var(--line) 55%, transparent);
-  --ring: var(--primary);
-  --chart-1: var(--primary);
+  --destructive-foreground: var(--ecru-soft);
+  --border: color-mix(in oklab, var(--kraft) 40%, transparent);
+  --input: color-mix(in oklab, var(--kraft) 55%, transparent);
+  --ring: var(--forest-green);
+  --chart-1: var(--forest-green);
   --chart-2: var(--gold);
   --chart-3: var(--up);
   --chart-4: var(--down);
-  --chart-5: var(--line);
-  --sidebar: var(--ink-2);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--ink-3);
-  --sidebar-accent-foreground: var(--foreground);
+  --chart-5: var(--kraft);
+  --sidebar: var(--ecru-light);
+  --sidebar-foreground: var(--espresso);
+  --sidebar-primary: var(--forest-green);
+  --sidebar-primary-foreground: var(--ecru-soft);
+  --sidebar-accent: var(--ecru-soft);
+  --sidebar-accent-foreground: var(--espresso);
   --sidebar-border: var(--border);
-  --sidebar-ring: var(--primary);
+  --sidebar-ring: var(--forest-green);
+
+  --shadow-paper: 0 1px 1px color-mix(in oklab, var(--espresso) 8%, transparent), 0 4px 10px -6px color-mix(in oklab, var(--espresso) 30%, transparent);
+  --shadow-paper-lift: 0 2px 3px color-mix(in oklab, var(--espresso) 8%, transparent), 0 16px 24px -16px color-mix(in oklab, var(--espresso) 45%, transparent);
+  --paper-ease: cubic-bezier(.22, 1, .36, 1);
 }
 
 @layer base {
@@ -115,7 +144,8 @@
 
   body {
     background-color: var(--color-background);
-    background-image: url("/grain-texture.svg");
+    background-image: url("/paper/fibers.webp"), url("/paper/grain.webp"), url("/paper/mottle.webp");
+    background-size: 300px 300px, 160px 160px, 900px 900px;
     background-repeat: repeat;
     color: var(--color-foreground);
     font-family: var(--font-sans);
@@ -126,9 +156,30 @@
   }
 }
 
-/* Paper surfaces and quiet live signals */
+/* Paper card craft surfaces */
+.paper-card {
+  background: var(--ecru-soft);
+  border: 1px solid color-mix(in oklab, var(--kraft) 40%, transparent);
+  box-shadow: 0 1px 1px color-mix(in oklab, var(--espresso) 8%, transparent), 0 4px 10px -6px color-mix(in oklab, var(--espresso) 30%, transparent);
+}
+
+.paper-surface {
+  background-color: var(--ecru);
+}
+
+.paper-surface-dark {
+  background-color: var(--espresso);
+  color: var(--ecru-soft);
+}
+
+.paper-label {
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
 @utility glass {
-  background: color-mix(in oklab, var(--card) 85%, transparent);
+  background: color-mix(in oklab, var(--card) 90%, transparent);
 }
 
 @utility live-dot {

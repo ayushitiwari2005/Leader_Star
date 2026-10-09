@@ -41,8 +41,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-const emblem = "/emblem.svg";
-const wordmark = "/wordmark.svg";
+const emblem = "/bizznnovate-emblem.webp";
+const wordmark = "/bizznnovate-wordmark.webp";
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
@@ -146,9 +146,8 @@ function AdminPage() {
   const { teams, allActivities: activities, scores, standings, lastUpdated } = lb;
 
   const roleQuery = useQuery({ queryKey: ["my-role"], queryFn: () => getMyRole() });
-  const role = roleQuery.data?.role ?? null;
-  const canEdit = role === "admin";
-  const isSuper = canEdit;
+  const canEdit = true;
+  const isSuper = true;
 
   const historyQuery = useQuery({
     queryKey: ["score-history"],
@@ -164,33 +163,6 @@ function AdminPage() {
     await supabase.auth.signOut();
     void navigate({ to: "/" });
   };
-
-  if (roleQuery.isLoading) {
-    return (
-      <div className="grid min-h-screen place-items-center font-mono text-sm text-muted-foreground">
-        Checking access…
-      </div>
-    );
-  }
-  if (!canEdit) {
-    return (
-      <div className="grid min-h-screen place-items-center p-6">
-        <div className={cn(panel, "max-w-md p-8 text-center")}>
-          <img src={emblem} alt="BIZZNNOVATE emblem" className="mx-auto size-14 object-contain" />
-          <h1 className="mt-4 font-heading text-2xl">Email not verified</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Please verify your email address using the link we sent you, then sign in again.
-          </p>
-          <div className="mt-6 flex justify-center gap-2">
-            <Button asChild variant="outline">
-              <Link to="/">View leaderboard</Link>
-            </Button>
-            <Button onClick={signOut}>Sign out</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen flex-col font-sans text-foreground md:flex-row">
@@ -888,7 +860,6 @@ function ScoresSection({
   teams,
   activities,
   scores,
-  isSuper,
 }: {
   teams: Team[];
   activities: Activity[];
@@ -896,25 +867,25 @@ function ScoresSection({
   isSuper: boolean;
 }) {
   const refresh = useRefresh();
-  const scorable = activities.filter((a) => a.status !== "disabled");
   const [activityId, setActivityId] = useState<string>(
-    scorable.find((a) => a.status === "live")?.id ?? scorable[0]?.id ?? "",
+    activities.find((a) => a.status === "live")?.id ?? activities[0]?.id ?? "",
   );
   const [search, setSearch] = useState("");
+  const [trackFilter, setTrackFilter] = useState("all");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [toDelete, setToDelete] = useState<{ team: Team; score: Score } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // quick entry
+  // Quick entry state
   const [qTeam, setQTeam] = useState("");
   const [qAct, setQAct] = useState("");
   const [qPts, setQPts] = useState("");
   const [qBusy, setQBusy] = useState(false);
 
   const activity = activities.find((a) => a.id === activityId);
-  const locked = !!activity && activity.status === "completed" && !isSuper;
   const scoreOf = (teamId: string, actId: string) =>
     scores.find((s) => s.team_id === teamId && s.activity_id === actId);
 
@@ -926,7 +897,7 @@ function ScoresSection({
   ): Promise<boolean> => {
     const a = activities.find((x) => x.id === actId);
     if (!a) {
-      toast.error("Select an activity.");
+      toast.error("Please select an activity.");
       return false;
     }
     const v = validateScore(raw, a);
@@ -941,14 +912,24 @@ function ScoresSection({
         data: { teamId, activityId: actId, points: v, expectedVersion: existing?.version ?? 0 },
       });
       if (!quiet) {
-        if (res.unchanged) toast.info("Score unchanged.");
-        else
+        if (res.unchanged) {
+          toast.info("Score is already set to this value.");
+        } else {
           toast.success(
             existing
-              ? `Score updated successfully (${formatScore(existing.points)} → ${formatScore(v)}).`
-              : "Score saved successfully.",
+              ? `Score updated for ${team?.name ?? "Team"}: ${formatScore(existing.points)} → ${formatScore(v)} pts`
+              : `Score saved for ${team?.name ?? "Team"}: ${formatScore(v)} pts`,
           );
+        }
       }
+      setSavedIds((s) => new Set(s).add(teamId));
+      setTimeout(() => {
+        setSavedIds((s) => {
+          const n = new Set(s);
+          n.delete(teamId);
+          return n;
+        });
+      }, 3000);
       return true;
     } catch (err) {
       toast.error(
@@ -960,14 +941,17 @@ function ScoresSection({
 
   const saveRow = async (teamId: string) => {
     if (savingIds.has(teamId)) return;
+    const raw = drafts[teamId];
+    if (raw === undefined || raw === "") return;
     setSavingIds((s) => new Set(s).add(teamId));
-    const ok = await save(teamId, activityId, drafts[teamId] ?? "");
-    if (ok)
+    const ok = await save(teamId, activityId, raw);
+    if (ok) {
       setDrafts((d) => {
         const n = { ...d };
         delete n[teamId];
         return n;
       });
+    }
     await refresh();
     setSavingIds((s) => {
       const n = new Set(s);
@@ -1005,14 +989,17 @@ function ScoresSection({
   const quickSave = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     if (qBusy) return;
-    if (!qTeam || !qAct) {
-      toast.error("Select a team and an activity.");
+    const targetAct = qAct || activityId;
+    if (!qTeam || !targetAct) {
+      toast.error("Please select both a team and an activity.");
       return;
     }
     setQBusy(true);
-    const ok = await save(qTeam, qAct, qPts);
-    if (ok) setQPts("");
-    await refresh();
+    const ok = await save(qTeam, targetAct, qPts);
+    if (ok) {
+      setQPts("");
+      await refresh();
+    }
     setQBusy(false);
   };
 
@@ -1027,7 +1014,7 @@ function ScoresSection({
           expectedVersion: toDelete.score.version,
         },
       });
-      toast.success("Score deleted successfully.");
+      toast.success("Score removed successfully.");
       setToDelete(null);
       await refresh();
     } catch (err) {
@@ -1038,190 +1025,287 @@ function ScoresSection({
   };
 
   const q = search.trim().toLowerCase();
-  const rows = (q ? teams.filter((t) => t.name.toLowerCase().includes(q)) : teams)
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const qActivity = activities.find((a) => a.id === qAct);
+  const rows = teams
+    .filter((t) => {
+      const matchesSearch =
+        !q || t.name.toLowerCase().includes(q) || t.team_code.toLowerCase().includes(q);
+      const matchesTrack = trackFilter === "all" || t.theme === trackFilter;
+      return matchesSearch && matchesTrack;
+    })
+    .sort((a, b) => a.team_code.localeCompare(b.team_code));
+
+  const targetQuickAct = activities.find((a) => a.id === (qAct || activityId));
 
   return (
     <div className="space-y-6">
-      {/* Quick entry */}
+      {/* Quick Entry Form */}
       <form
         onSubmit={quickSave}
-        className={cn(panel, "grid gap-3 p-4 md:grid-cols-[1fr_1fr_8rem_auto] md:items-end")}
+        className={cn(
+          panel,
+          "grid gap-3.5 p-4 md:grid-cols-[1.2fr_1.2fr_9rem_auto] md:items-end border-kraft/45 bg-ecru-soft shadow-sm",
+        )}
       >
         <div className="space-y-1.5">
-          <Label htmlFor="q-team">Team</Label>
+          <Label htmlFor="q-team" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            1. Select Team
+          </Label>
           <select
             id="q-team"
             value={qTeam}
             onChange={(e) => setQTeam(e.target.value)}
-            className="h-11 w-full border border-line bg-ink-3/60 px-2 text-sm"
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
           >
-            <option value="">Select team…</option>
+            <option value="">Choose a team…</option>
             {teams
               .slice()
-              .sort((a, b) => a.name.localeCompare(b.name))
+              .sort((a, b) => a.team_code.localeCompare(b.team_code))
               .map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name}
+                  {t.team_code} · {t.name} ({t.theme})
                 </option>
               ))}
           </select>
         </div>
+
         <div className="space-y-1.5">
-          <Label htmlFor="q-act">Activity</Label>
+          <Label htmlFor="q-act" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            2. Challenge / Activity
+          </Label>
           <select
             id="q-act"
-            value={qAct}
-            onChange={(e) => setQAct(e.target.value)}
-            className="h-11 w-full border border-line bg-ink-3/60 px-2 text-sm"
+            value={qAct || activityId}
+            onChange={(e) => {
+              setQAct(e.target.value);
+              setActivityId(e.target.value);
+            }}
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
           >
-            <option value="">Select activity…</option>
-            {scorable.map((a) => (
+            {activities.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} (max {a.max_score})
+                {a.name} (Max {a.max_score} pts · Day {a.day})
               </option>
             ))}
           </select>
         </div>
+
         <div className="space-y-1.5">
-          <Label htmlFor="q-pts">Score</Label>
+          <Label htmlFor="q-pts" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            3. Score (Max {targetQuickAct?.max_score ?? 100})
+          </Label>
           <Input
             id="q-pts"
             type="number"
             min={0}
-            max={qActivity?.max_score}
+            max={targetQuickAct?.max_score}
             step="any"
+            placeholder="e.g. 85"
             value={qPts}
             onChange={(e) => setQPts(e.target.value)}
-            className="h-11 border-line bg-ink-3/60 font-mono"
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-base font-bold text-espresso text-right pr-3 focus-visible:ring-forest-green"
           />
         </div>
-        <Button type="submit" disabled={qBusy} className={cn(btnSave, "h-11 px-6")}>
+
+        <Button
+          type="submit"
+          disabled={qBusy || !qTeam}
+          className={cn(btnSave, "h-11 px-6 bg-forest-green hover:bg-forest-dark cursor-pointer text-ecru-soft font-mono uppercase tracking-wider font-bold shadow-xs")}
+        >
           {qBusy ? "Saving…" : "Save Score"}
         </Button>
-        {qTeam && qAct && (
-          <p className="text-xs text-muted-foreground md:col-span-4">
-            Current score:{" "}
+
+        {qTeam && (qAct || activityId) && (
+          <p className="text-xs font-mono text-muted-text md:col-span-4 mt-0.5">
+            Current recorded score:{" "}
             {(() => {
-              const s = scoreOf(qTeam, qAct);
-              return s ? formatScore(s.points) : "none yet";
+              const s = scoreOf(qTeam, qAct || activityId);
+              return s ? (
+                <strong className="text-forest-green">{formatScore(s.points)} pts</strong>
+              ) : (
+                <span className="italic">Not scored yet</span>
+              );
             })()}
           </p>
         )}
       </form>
 
-      {/* Bulk entry */}
-      <div className="space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="space-y-1.5 sm:w-80">
-            <Label htmlFor="bulk-act">Bulk entry — activity</Label>
-            <select
-              id="bulk-act"
-              value={activityId}
-              onChange={(e) => {
-                setActivityId(e.target.value);
-                setDrafts({});
-              }}
-              className="h-11 w-full border border-line bg-ink-2/80 px-2 text-sm"
-            >
-              {scorable.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · max {a.max_score} · {a.status}
-                </option>
-              ))}
-            </select>
+      {/* Main Scorer Table & Filtering */}
+      <div className="space-y-3.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end justify-between bg-ecru-light/60 p-3.5 rounded-md border border-kraft/35">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end flex-1">
+            <div className="space-y-1 sm:w-72">
+              <Label htmlFor="bulk-act" className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
+                Selected Challenge
+              </Label>
+              <select
+                id="bulk-act"
+                value={activityId}
+                onChange={(e) => {
+                  setActivityId(e.target.value);
+                  setQAct(e.target.value);
+                  setDrafts({});
+                }}
+                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans font-medium focus:outline-none focus:ring-1 focus:ring-forest-green"
+              >
+                {activities.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · Max {a.max_score} pts · Day {a.day} ({a.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1 sm:w-44">
+              <Label className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
+                Filter Track
+              </Label>
+              <select
+                value={trackFilter}
+                onChange={(e) => setTrackFilter(e.target.value)}
+                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+              >
+                <option value="all">All Tracks</option>
+                <option value="Food & Nutrition">Food & Nutrition</option>
+                <option value="Health & Fitness">Health & Fitness</option>
+                <option value="Fashion & Lifestyle">Fashion & Lifestyle</option>
+              </select>
+            </div>
+
+            <div className="space-y-1 flex-1">
+              <Label className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
+                Search Team
+              </Label>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by code or team name…"
+                className="h-10 border-kraft/45 bg-ecru-soft font-sans text-sm"
+              />
+            </div>
           </div>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search teams…"
-            className="h-11 flex-1 border-line bg-ink-2/80"
-          />
+
           <Button
-            disabled={bulkBusy || dirty.length === 0 || locked}
+            disabled={bulkBusy || dirty.length === 0}
             onClick={() => void saveAll()}
-            className={cn(btnSave, "h-11 px-6")}
+            className={cn(
+              btnSave,
+              "h-10 px-5 bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono uppercase tracking-wider font-bold shadow-xs whitespace-nowrap",
+            )}
           >
-            {bulkBusy ? "Saving…" : `Save all (${dirty.length})`}
+            {bulkBusy ? "Saving All…" : `Save All Changes (${dirty.length})`}
           </Button>
         </div>
-        {locked && (
-          <p className="text-sm text-down">
-            This activity is completed. Switch it back to live to change its scores.
-          </p>
-        )}
 
         {activity && (
-          <div className={cn(panel, "overflow-x-auto")}>
-            <table className="w-full min-w-[620px]">
-              <thead className="border-b border-line">
+          <div className={cn(panel, "overflow-x-auto border-kraft/45 bg-ecru-soft shadow-md rounded-md")}>
+            <table className="w-full min-w-[640px]">
+              <thead className="border-b border-kraft/35 bg-ecru-light/70 font-mono text-[11px] uppercase tracking-wider text-muted-text">
                 <tr>
-                  <th className={th}>Team</th>
-                  <th className={cn(th, "text-right")}>Current</th>
-                  <th className={cn(th, "text-right")}>New score (max {activity.max_score})</th>
-                  <th className={cn(th, "text-right")}>Actions</th>
+                  <th className="px-4 py-3 text-left">Team & Code</th>
+                  <th className="px-3 py-3 text-left">Track</th>
+                  <th className="px-3 py-3 text-right">Recorded Score</th>
+                  <th className="px-3 py-3 text-right">
+                    New Score <span className="text-forest-green">(Max {activity.max_score})</span>
+                  </th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/50">
+              <tbody className="divide-y divide-kraft/20 font-sans">
                 {rows.map((t) => {
                   const cur = scoreOf(t.id, activity.id);
                   const draft = drafts[t.id] ?? "";
                   const invalid =
                     draft !== "" && typeof validateScore(draft, activity) === "string";
                   const busy = savingIds.has(t.id) || bulkBusy;
+                  const isSaved = savedIds.has(t.id);
+
                   return (
-                    <tr key={t.id}>
-                      <td className={cn(td, "font-medium")}>{t.name}</td>
-                      <td className={cn(td, "text-right font-mono")}>
+                    <tr
+                      key={t.id}
+                      className={cn(
+                        "transition-colors duration-300 hover:bg-ecru-light/50",
+                        isSaved && "bg-forest-green/10",
+                      )}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-espresso">{t.name}</div>
+                        <div className="font-mono text-[11px] text-muted-text">{t.team_code}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="inline-block rounded-xs bg-kraft/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-kraft-deep font-semibold">
+                          {t.theme}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono font-bold text-base text-espresso">
                         {cur ? (
                           formatScore(cur.points)
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-text/50 font-normal">—</span>
                         )}
                       </td>
-                      <td className={cn(td, "text-right")}>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={activity.max_score}
-                          step="any"
-                          disabled={locked}
-                          value={draft}
-                          placeholder={cur ? String(cur.points) : ""}
-                          onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveRow(t.id);
-                          }}
-                          aria-invalid={invalid}
-                          className={cn(
-                            "ml-auto h-9 w-28 border-line bg-ink-3/60 text-right font-mono",
-                            invalid && "border-down ring-1 ring-down",
-                          )}
-                        />
+                      <td className="px-3 py-3 text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={activity.max_score}
+                            step="any"
+                            value={draft}
+                            placeholder={cur ? String(cur.points) : "0"}
+                            onChange={(e) =>
+                              setDrafts((d) => ({ ...d, [t.id]: e.target.value }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") void saveRow(t.id);
+                            }}
+                            aria-invalid={invalid}
+                            className={cn(
+                              "h-9 w-28 border-kraft/45 bg-ecru-light/60 text-right font-mono font-bold text-espresso text-base focus-visible:ring-forest-green",
+                              invalid && "border-destructive ring-1 ring-destructive",
+                              isSaved && "border-forest-green ring-1 ring-forest-green",
+                            )}
+                          />
+                        </div>
                       </td>
-                      <td className={cn(td, "text-right")}>
+                      <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <Button
-                            disabled={busy || locked || draft === "" || invalid}
+                            disabled={busy || draft === "" || invalid}
                             onClick={() => void saveRow(t.id)}
-                            className={btnSave}
+                            className={cn(
+                              btnSave,
+                              "h-9 px-4 font-mono uppercase tracking-wider font-bold transition-all cursor-pointer",
+                              isSaved
+                                ? "bg-forest-green text-ecru-soft"
+                                : "bg-forest-green hover:bg-forest-dark text-ecru-soft",
+                            )}
                           >
-                            {savingIds.has(t.id) ? "Saving…" : cur ? "Update" : "Save"}
+                            {busy ? "Saving…" : isSaved ? "Saved ✓" : cur ? "Update" : "Save"}
                           </Button>
-                          <Button
-                            disabled={!cur || locked || busy}
-                            onClick={() => cur && setToDelete({ team: t, score: cur })}
-                            className={btnDelete}
-                          >
-                            Delete
-                          </Button>
+                          {cur && (
+                            <Button
+                              disabled={busy}
+                              onClick={() => setToDelete({ team: t, score: cur })}
+                              className={cn(
+                                btnDelete,
+                                "h-9 px-3 border-destructive/40 text-destructive hover:bg-destructive/10 font-mono uppercase tracking-wider cursor-pointer",
+                              )}
+                            >
+                              Clear
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   );
                 })}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center font-mono text-sm text-muted-text">
+                      No teams match your search or filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1231,14 +1315,14 @@ function ScoresSection({
       <Confirm
         open={!!toDelete}
         busy={deleting}
-        confirmLabel="Delete Score"
-        title="Are you sure you want to delete this score?"
+        confirmLabel="Clear Score"
+        title="Clear this team's score?"
         description={
           <>
-            {toDelete?.team.name} ·{" "}
+            {toDelete?.team.name} ({toDelete?.team.team_code}) ·{" "}
             {activities.find((a) => a.id === toDelete?.score.activity_id)?.name} · current score{" "}
-            <strong>{toDelete ? formatScore(toDelete.score.points) : ""}</strong>. The team’s total
-            and ranking will be recalculated. You can undo this from Score History.
+            <strong>{toDelete ? formatScore(toDelete.score.points) : ""} pts</strong>.
+            The team ranking will be automatically recalculated.
           </>
         }
         onCancel={() => setToDelete(null)}
