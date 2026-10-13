@@ -9,23 +9,29 @@ import {
   ListChecks,
   LogOut,
   Users,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  Search,
+  Filter,
+  ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import {
-  createActivity,
-  createTeam,
-  deleteActivity,
-  deleteScore,
-  deleteTeam,
-  getMyRole,
-  getScoreHistory,
-  renameTeam,
-  rollbackScore,
-  updateActivity,
-  upsertScore,
-} from "@/lib/admin.functions";
-import { formatScore, formatTime, type Activity, type Score, type Team } from "@/lib/leaderboard";
+  addActivityData,
+  addTeamData,
+  deleteActivityData,
+  deleteScoreData,
+  deleteTeamData,
+  getAuditLogs,
+  updateActivityData,
+  updateTeamData,
+  upsertScoreData,
+  type AuditLogItem,
+} from "@/lib/data-service";
+import { formatScore, formatCapital, formatTime, type Activity, type Score, type Team } from "@/lib/leaderboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,10 +45,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { clearAdminSession } from "@/routes/_authenticated/route";
+
 const emblem = "/bizznnovate-emblem.webp";
 const wordmark = "/bizznnovate-wordmark.webp";
+
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
@@ -67,58 +83,69 @@ const NAV: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "history", label: "Score History", icon: History },
 ];
 
-type HistoryLog = Awaited<ReturnType<typeof getScoreHistory>>["logs"][number];
+const TRACK_OPTIONS = [
+  "Food & Nutrition",
+  "Health & Fitness",
+  "Fashion & Lifestyle",
+  "Tech & Innovation",
+  "FinTech",
+  "EdTech",
+  "General Track",
+];
 
 const errMsg = (e: unknown, fallback: string) =>
   e instanceof Error && e.message ? e.message : fallback;
 
 /* ---------- shared UI ---------- */
 
-const panel = "border border-line/40 bg-ink-2/80";
+const panel = "border border-kraft/45 bg-ecru-soft shadow-xs";
 const th =
-  "px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground";
-const td = "px-3 py-2.5 text-sm";
+  "px-3 py-2.5 text-left font-mono text-[11px] uppercase tracking-[0.16em] text-muted-text font-bold";
+const td = "px-3 py-2.5 text-sm font-sans";
 const btnEdit =
-  "h-9 border border-primary/40 bg-transparent px-3 text-xs font-semibold uppercase tracking-wider text-primary hover:bg-primary/10";
+  "h-9 border border-kraft/60 bg-transparent px-3 text-xs font-mono font-semibold uppercase tracking-wider text-espresso hover:bg-kraft/20 cursor-pointer";
 const btnDelete =
-  "h-9 border border-down/40 bg-transparent px-3 text-xs font-semibold uppercase tracking-wider text-down hover:bg-down/10";
+  "h-9 border border-destructive/40 bg-transparent px-3 text-xs font-mono font-semibold uppercase tracking-wider text-destructive hover:bg-destructive/10 cursor-pointer";
 const btnSave =
-  "h-9 bg-primary px-4 text-xs font-semibold uppercase tracking-wider text-primary-foreground hover:bg-primary/90";
-const btnRollback =
-  "h-9 border border-gold/50 bg-transparent px-3 text-xs font-semibold uppercase tracking-wider text-gold hover:bg-gold/10";
+  "h-9 bg-forest-green px-4 text-xs font-mono font-bold uppercase tracking-wider text-ecru-soft hover:bg-forest-dark cursor-pointer";
 
 function Confirm(props: {
   open: boolean;
+  busy?: boolean;
   title: string;
   description: React.ReactNode;
   confirmLabel: string;
-  busy: boolean;
-  tone?: "danger" | "warn";
-  onCancel: () => void;
+  tone?: "warn" | "danger";
   onConfirm: () => void;
+  onCancel: () => void;
 }) {
   return (
     <AlertDialog open={props.open} onOpenChange={(o) => !o && !props.busy && props.onCancel()}>
-      <AlertDialogContent>
+      <AlertDialogContent className="border-kraft/45 bg-ecru-soft font-sans">
         <AlertDialogHeader>
-          <AlertDialogTitle>{props.title}</AlertDialogTitle>
+          <AlertDialogTitle className="font-heading text-xl text-espresso">
+            {props.title}
+          </AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="text-sm text-muted-foreground">{props.description}</div>
+            <div className="text-sm text-muted-text">{props.description}</div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={props.busy}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={props.busy} className="font-mono text-xs uppercase">
+            Cancel
+          </AlertDialogCancel>
           <AlertDialogAction
             disabled={props.busy}
             onClick={(e) => {
               e.preventDefault();
               props.onConfirm();
             }}
-            className={
+            className={cn(
+              "font-mono text-xs font-bold uppercase tracking-wider text-ecru-soft",
               props.tone === "warn"
-                ? "bg-gold text-primary-foreground hover:bg-gold/90"
-                : "bg-down text-primary-foreground hover:bg-down/90"
-            }
+                ? "bg-kraft-deep hover:bg-espresso"
+                : "bg-destructive hover:bg-destructive/90",
+            )}
           >
             {props.busy ? "Working…" : props.confirmLabel}
           </AlertDialogAction>
@@ -143,30 +170,27 @@ function AdminPage() {
   const navigate = useNavigate();
   const [section, setSection] = useState<Section>("dashboard");
   const lb = useLeaderboard();
-  const { teams, allActivities: activities, scores, standings, lastUpdated } = lb;
-
-  const roleQuery = useQuery({ queryKey: ["my-role"], queryFn: () => getMyRole() });
-  const canEdit = true;
-  const isSuper = true;
+  const { teams, activities, scores, standings, lastUpdated } = lb;
 
   const historyQuery = useQuery({
     queryKey: ["score-history"],
-    queryFn: () => getScoreHistory(),
-    enabled: canEdit,
-    refetchInterval: 15000,
+    queryFn: () => getAuditLogs(),
+    refetchInterval: 10000,
   });
-  const logs = historyQuery.data?.logs ?? [];
+  const logs = historyQuery.data ?? [];
 
   const totals = useMemo(() => new Map(standings.map((s) => [s.team.id, s])), [standings]);
 
   const signOut = async () => {
+    clearAdminSession();
     await supabase.auth.signOut();
+    toast.info("Signed out of Admin Console.");
     void navigate({ to: "/" });
   };
 
   return (
-    <div className="flex min-h-screen flex-col font-sans text-foreground md:flex-row">
-      <aside className="flex shrink-0 flex-col border-b border-line/50 bg-ink-2/80 p-4 md:w-60 md:border-b-0 md:border-r">
+    <div className="flex min-h-screen flex-col font-sans text-espresso antialiased md:flex-row bg-ecru">
+      <aside className="flex shrink-0 flex-col border-b border-kraft/45 bg-ecru-soft p-4 md:w-64 md:border-b-0 md:border-r shadow-xs">
         <div className="flex items-center gap-3 px-2">
           <img src={emblem} alt="BIZZNNOVATE emblem" className="size-10 object-contain" />
           <div className="min-w-0">
@@ -175,21 +199,22 @@ function AdminPage() {
               alt="BIZZNNOVATE"
               className="h-auto w-32 object-contain object-left"
             />
-            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-primary">
-              Admin Console
+            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.2em] text-forest-green font-bold flex items-center gap-1">
+              <ShieldCheck className="size-3 text-forest-green" /> Admin Console
             </div>
           </div>
         </div>
+
         <nav className="mt-4 flex gap-1 overflow-x-auto md:mt-8 md:block md:space-y-1">
           {NAV.map((item) => (
             <button
               key={item.id}
               onClick={() => setSection(item.id)}
               className={cn(
-                "flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-3 text-sm font-medium transition-colors md:w-full md:gap-3",
+                "flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xs px-3 py-2.5 text-sm font-semibold transition-all md:w-full md:gap-3 cursor-pointer",
                 section === item.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-ink-3/60 hover:text-foreground",
+                  ? "bg-forest-green text-ecru-soft shadow-xs"
+                  : "text-muted-text hover:bg-kraft/20 hover:text-espresso",
               )}
             >
               <item.icon className="size-4" />
@@ -197,34 +222,51 @@ function AdminPage() {
             </button>
           ))}
         </nav>
-        <div className="mt-3 flex gap-2 md:mt-auto md:block md:space-y-1">
+
+        <div className="mt-3 flex gap-2 md:mt-auto md:block md:space-y-1 pt-4 border-t border-kraft/35">
           <Link
             to="/"
-            className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:bg-ink-3/60 hover:text-foreground md:w-full"
+            className="flex items-center gap-3 px-3 py-2 text-sm text-muted-text hover:bg-kraft/15 hover:text-espresso md:w-full transition-colors"
           >
-            <ListChecks className="size-4" /> Public leaderboard
+            <ListChecks className="size-4" /> Public Leaderboard
+          </Link>
+          <Link
+            to="/display"
+            className="flex items-center gap-3 px-3 py-2 text-sm text-muted-text hover:bg-kraft/15 hover:text-espresso md:w-full transition-colors"
+          >
+            <ActivityIcon className="size-4" /> Projector View
           </Link>
           <button
             onClick={signOut}
-            className="flex items-center gap-3 px-3 py-2.5 text-sm text-muted-foreground hover:bg-ink-3/60 hover:text-down md:w-full"
+            className="flex items-center gap-3 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 md:w-full transition-colors cursor-pointer"
           >
-            <LogOut className="size-4" /> Logout
+            <LogOut className="size-4" /> Logout Admin
           </button>
         </div>
       </aside>
 
       <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
-        <div className="mb-6">
-          <h1 className="font-heading text-3xl font-semibold tracking-wide">
-            {NAV.find((n) => n.id === section)?.label}
-          </h1>
-          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            Verified admin · Updated {lastUpdated ? formatTime(lastUpdated) : "—"}
-          </p>
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-kraft/35 pb-4">
+          <div>
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-espresso">
+              {NAV.find((n) => n.id === section)?.label}
+            </h1>
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-text font-semibold">
+              Verified Event Admin · Updated {lastUpdated ? formatTime(lastUpdated) : "Live"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-forest-green/15 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-forest-green">
+              <span className="size-2 rounded-full bg-forest-green animate-pulse" />
+              Database Active & Synced
+            </span>
+          </div>
         </div>
 
         {lb.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading data…</p>
+          <p className="font-mono text-sm text-muted-text animate-pulse">
+            Connecting to database…
+          </p>
         ) : (
           <>
             {section === "dashboard" && (
@@ -238,14 +280,13 @@ function AdminPage() {
             )}
             {section === "teams" && <TeamsSection teams={teams} totals={totals} />}
             {section === "activities" && (
-              <ActivitiesSection activities={activities} scores={scores} isSuper={isSuper} />
+              <ActivitiesSection activities={activities} scores={scores} />
             )}
             {section === "scores" && (
               <ScoresSection
                 teams={teams}
                 activities={activities}
                 scores={scores}
-                isSuper={isSuper}
               />
             )}
             {section === "history" && (
@@ -272,35 +313,23 @@ const ACTION_LABEL: Record<string, string> = {
   activity_create: "Activity added",
   activity_update: "Activity updated",
   activity_delete: "Activity deleted",
-  role_set: "Role set",
-  role_remove: "Role removed",
 };
 
-type ScoreVal = {
-  team_name?: string;
-  activity_name?: string;
-  points?: number | null;
-  name?: string;
-  email?: string;
-  role?: string;
-} | null;
-
-function describe(l: HistoryLog) {
-  const o = l.old_value as ScoreVal;
-  const n = l.new_value as ScoreVal;
+function describe(l: AuditLogItem) {
+  const o = l.old_value;
+  const n = l.new_value;
   if (l.entity_type === "score") {
-    const team = n?.team_name ?? o?.team_name ?? "Team";
-    const act = n?.activity_name ?? o?.activity_name ?? "Activity";
     const from = o?.points ?? null;
     const to = n?.points ?? null;
-    return `${team} · ${act} · ${from === null ? "—" : formatScore(from)} → ${to === null ? "—" : formatScore(to)}`;
+    return `Score: ${from === null ? "—" : formatScore(from)} → ${to === null ? "—" : formatScore(to)} pts`;
   }
   if (l.entity_type === "team") {
-    if (l.action === "team_rename") return `${o?.name} → ${n?.name}`;
+    if (l.action === "team_create") return `Team "${n?.name}" (${n?.theme ?? ""}) added`;
+    if (l.action === "team_update") return `Team "${n?.name}" updated`;
+    if (l.action === "team_delete") return `Team removed`;
     return n?.name ?? o?.name ?? "Team";
   }
   if (l.entity_type === "activity") return n?.name ?? o?.name ?? "Activity";
-  if (l.entity_type === "user") return n?.email ? `${n.email} (${n.role})` : "User";
   return "";
 }
 
@@ -309,45 +338,55 @@ function Dashboard(props: {
   activities: Activity[];
   scores: Score[];
   lastUpdated: Date | null;
-  logs: HistoryLog[];
+  logs: AuditLogItem[];
 }) {
   const cards = [
     { label: "Total Teams", value: String(props.teams.length) },
     { label: "Total Activities", value: String(props.activities.length) },
-    { label: "Score Entries", value: String(props.scores.length) },
-    { label: "Last Updated", value: props.lastUpdated ? formatTime(props.lastUpdated) : "—" },
+    { label: "Recorded Scores", value: String(props.scores.length) },
+    { label: "Last Sync", value: props.lastUpdated ? formatTime(props.lastUpdated) : "Live" },
   ];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className={cn(panel, "p-4")}>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-text font-bold">
               {c.label}
             </div>
-            <div className="mt-2 truncate font-display text-3xl">{c.value}</div>
+            <div className="mt-2 truncate font-heading text-3xl font-bold text-espresso">
+              {c.value}
+            </div>
           </div>
         ))}
       </div>
+
       <div className={panel}>
-        <div className="border-b border-line/40 px-4 py-3 font-heading text-lg">
-          Recent Activity
+        <div className="border-b border-kraft/35 px-4 py-3 font-heading text-lg font-bold text-espresso">
+          Recent Event Activity & Logs
         </div>
         {props.logs.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">No changes yet.</p>
+          <p className="px-4 py-6 font-mono text-sm text-muted-text">
+            No score changes logged yet.
+          </p>
         ) : (
-          <ul className="divide-y divide-line/40">
+          <ul className="divide-y divide-kraft/35 font-sans">
             {props.logs.slice(0, 10).map((l) => (
               <li
                 key={l.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm"
               >
-                <span className="w-16 font-mono text-xs text-muted-foreground">
+                <span className="w-20 font-mono text-xs text-muted-text">
                   {formatTime(new Date(l.created_at))}
                 </span>
-                <span className="font-semibold">{ACTION_LABEL[l.action] ?? l.action}</span>
-                <span className="min-w-0 flex-1 truncate">{describe(l)}</span>
-                <span className="text-xs text-muted-foreground">{l.performer}</span>
+                <span className="font-semibold text-espresso">
+                  {ACTION_LABEL[l.action] ?? l.action}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-muted-text">{describe(l)}</span>
+                <span className="font-mono text-xs text-forest-green font-semibold">
+                  {l.performer}
+                </span>
               </li>
             ))}
           </ul>
@@ -357,7 +396,7 @@ function Dashboard(props: {
   );
 }
 
-/* ---------- teams ---------- */
+/* ---------- teams section ---------- */
 
 function TeamsSection({
   teams,
@@ -367,208 +406,373 @@ function TeamsSection({
   totals: Map<string, { total: number; rank: number }>;
 }) {
   const refresh = useRefresh();
-  const [newName, setNewName] = useState("");
+  const [name, setName] = useState("");
+  const [theme, setTheme] = useState(TRACK_OPTIONS[0]);
+  const [teamCode, setTeamCode] = useState("");
+  const [members, setMembers] = useState("4");
+  const [capital, setCapital] = useState("100000");
   const [adding, setAdding] = useState(false);
+
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
+  const [filterTrack, setFilterTrack] = useState("all");
+
+  // Edit Team state
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editName, setEditName] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editTheme, setEditTheme] = useState("");
+  const [editCode, setEditCode] = useState("");
+  const [editMembers, setEditMembers] = useState("");
+  const [editCapital, setEditCapital] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [toDelete, setToDelete] = useState<Team | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const isDup = (name: string, exceptId?: string) =>
-    teams.some(
-      (t) => t.id !== exceptId && t.name.trim().toLowerCase() === name.trim().toLowerCase(),
-    );
-
-  const add = async (e: { preventDefault(): void }) => {
+  const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (adding) return;
-    const name = newName.trim();
-    if (!name) {
+    const n = name.trim();
+    if (!n) {
       toast.error("Team name is required.");
-      return;
-    }
-    if (isDup(name)) {
-      toast.error(`A team named "${name}" already exists.`);
       return;
     }
     setAdding(true);
     try {
-      await createTeam({ data: { name } });
-      toast.success("Team added successfully.");
-      setNewName("");
+      await addTeamData({
+        name: n,
+        theme: theme,
+        team_code: teamCode.trim() || undefined,
+        members_count: Number(members) || 4,
+        initial_capital: Number(capital) || 100000,
+        current_capital: Number(capital) || 100000,
+      });
+      toast.success(`Team "${n}" added and saved to database.`);
+      setName("");
+      setTeamCode("");
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to add team. Please try again."));
+      toast.error(errMsg(err, "Failed to add team."));
     } finally {
       setAdding(false);
     }
   };
 
-  const saveName = async (id: string) => {
-    if (saving) return;
-    const name = editName.trim();
-    if (!name) {
+  const openEdit = (t: Team) => {
+    setEditingTeam(t);
+    setEditName(t.name);
+    setEditTheme(t.theme);
+    setEditCode(t.team_code);
+    setEditMembers(String(t.members_count || 4));
+    setEditCapital(String(t.current_capital || 100000));
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeam || savingEdit) return;
+    const n = editName.trim();
+    if (!n) {
       toast.error("Team name is required.");
       return;
     }
-    if (isDup(name, id)) {
-      toast.error(`A team named "${name}" already exists.`);
-      return;
-    }
-    setSaving(true);
+    setSavingEdit(true);
     try {
-      await renameTeam({ data: { id, name } });
-      toast.success("Team renamed successfully.");
-      setEditing(null);
+      await updateTeamData(editingTeam.id, {
+        name: n,
+        theme: editTheme,
+        team_code: editCode.trim() || editingTeam.team_code,
+        members_count: Number(editMembers) || 4,
+        current_capital: Number(editCapital) || 100000,
+      });
+      toast.success(`Team "${n}" updated successfully in database.`);
+      setEditingTeam(null);
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to rename team. Please try again."));
+      toast.error(errMsg(err, "Failed to update team."));
     } finally {
-      setSaving(false);
+      setSavingEdit(false);
     }
   };
 
   const confirmDelete = async () => {
     if (!toDelete) return;
-    setBusy(true);
+    setDeleting(true);
     try {
-      await deleteTeam({ data: { id: toDelete.id } });
-      toast.success("Team deleted successfully.");
+      await deleteTeamData(toDelete.id);
+      toast.success(`Team "${toDelete.name}" deleted from database.`);
       setToDelete(null);
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to delete team. Please try again."));
+      toast.error(errMsg(err, "Failed to delete team."));
     } finally {
-      setBusy(false);
+      setDeleting(false);
     }
   };
 
   const q = search.trim().toLowerCase();
-  const filtered = (q ? teams.filter((t) => t.name.toLowerCase().includes(q)) : teams)
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = teams
+    .filter((t) => {
+      const matchQ =
+        !q || t.name.toLowerCase().includes(q) || t.team_code.toLowerCase().includes(q);
+      const matchTrack = filterTrack === "all" || t.theme === filterTrack;
+      return matchQ && matchTrack;
+    })
+    .sort((a, b) => a.team_code.localeCompare(b.team_code));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Add New Team Form */}
       <form
         onSubmit={add}
-        className={cn(panel, "flex flex-col gap-3 p-4 sm:flex-row sm:items-end")}
+        className={cn(
+          panel,
+          "grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-5 items-end",
+        )}
       >
-        <div className="flex-1 space-y-1.5">
-          <Label htmlFor="new-team">Team Name</Label>
+        <div className="space-y-1.5 lg:col-span-2">
+          <Label htmlFor="team-name" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Team Name *
+          </Label>
           <Input
-            id="new-team"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Enter team name"
+            id="team-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. NutriBloom Labs"
             maxLength={100}
-            className="h-11 border-line bg-ink-3/60"
+            required
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-sans"
           />
         </div>
-        <Button type="submit" disabled={adding} className={cn(btnSave, "h-11 px-6")}>
-          {adding ? "Adding…" : "Add Team"}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="team-theme" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Sector / Industry Track *
+          </Label>
+          <select
+            id="team-theme"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value)}
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+          >
+            {TRACK_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="team-code" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Code (Auto if blank)
+          </Label>
+          <Input
+            id="team-code"
+            value={teamCode}
+            onChange={(e) => setTeamCode(e.target.value)}
+            placeholder="Auto e.g. T07"
+            maxLength={10}
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-sm"
+          />
+        </div>
+
+        <Button
+          type="submit"
+          disabled={adding}
+          className={cn(btnSave, "h-11 w-full font-mono uppercase tracking-wider font-bold shadow-xs")}
+        >
+          {adding ? "Saving…" : "+ Add Team"}
         </Button>
       </form>
 
-      <Input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder={`Search ${teams.length} teams…`}
-        className="h-11 border-line bg-ink-2/80"
-      />
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3.5 size-4 text-muted-text" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${teams.length} teams by name or code…`}
+            className="h-11 pl-9 border-kraft/45 bg-ecru-soft font-sans text-sm"
+          />
+        </div>
 
+        <div className="flex items-center gap-2 sm:w-64">
+          <Filter className="size-4 text-muted-text shrink-0" />
+          <select
+            value={filterTrack}
+            onChange={(e) => setFilterTrack(e.target.value)}
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+          >
+            <option value="all">All Sectors ({teams.length})</option>
+            {TRACK_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt} ({teams.filter((t) => t.theme === opt).length})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Teams Table */}
       <div className={cn(panel, "overflow-x-auto")}>
-        <table className="w-full min-w-[520px]">
-          <thead className="border-b border-line">
+        <table className="w-full min-w-[700px]">
+          <thead className="border-b border-kraft/35 bg-ecru-light/50">
             <tr>
+              <th className={th}>Code</th>
               <th className={th}>Team Name</th>
+              <th className={th}>Sector / Track</th>
+              <th className={cn(th, "text-right")}>Members</th>
               <th className={cn(th, "text-right")}>Total Score</th>
+              <th className={cn(th, "text-right")}>Rank</th>
               <th className={cn(th, "text-right")}>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line/50">
+          <tbody className="divide-y divide-kraft/30 font-sans">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No teams found.
+                <td colSpan={7} className="px-3 py-8 text-center font-mono text-sm text-muted-text">
+                  No teams found. Use "+ Add Team" above to register teams.
                 </td>
               </tr>
             )}
-            {filtered.map((t) => (
-              <tr key={t.id}>
-                <td className={td}>
-                  {editing === t.id ? (
-                    <Input
-                      autoFocus
-                      value={editName}
-                      maxLength={100}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void saveName(t.id);
-                        if (e.key === "Escape") setEditing(null);
-                      }}
-                      className="h-9 border-line bg-ink-3/60"
-                    />
-                  ) : (
-                    <span className="font-medium">{t.name}</span>
-                  )}
-                </td>
-                <td className={cn(td, "text-right font-mono")}>
-                  {formatScore(totals.get(t.id)?.total ?? 0)}
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    #{totals.get(t.id)?.rank ?? "—"}
-                  </span>
-                </td>
-                <td className={cn(td, "text-right")}>
-                  <div className="flex justify-end gap-2">
-                    {editing === t.id ? (
-                      <>
-                        <Button
-                          disabled={saving}
-                          onClick={() => void saveName(t.id)}
-                          className={btnSave}
-                        >
-                          {saving ? "Saving…" : "Save"}
-                        </Button>
-                        <Button variant="ghost" onClick={() => setEditing(null)} className="h-9">
-                          Cancel
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          onClick={() => {
-                            setEditing(t.id);
-                            setEditName(t.name);
-                          }}
-                          className={btnEdit}
-                        >
-                          Edit
-                        </Button>
-                        <Button onClick={() => setToDelete(t)} className={btnDelete}>
-                          Delete
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {filtered.map((t) => {
+              const standing = totals.get(t.id);
+              return (
+                <tr key={t.id} className="hover:bg-ecru-light/40 transition-colors">
+                  <td className={cn(td, "font-mono font-bold text-forest-green")}>
+                    {t.team_code}
+                  </td>
+                  <td className={cn(td, "font-semibold text-espresso")}>
+                    {t.name}
+                  </td>
+                  <td className={td}>
+                    <span className="inline-block rounded-xs bg-kraft/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-kraft-deep">
+                      {t.theme}
+                    </span>
+                  </td>
+                  <td className={cn(td, "text-right font-mono text-xs text-muted-text")}>
+                    {t.members_count || 4}
+                  </td>
+                  <td className={cn(td, "text-right font-mono font-bold text-base text-espresso")}>
+                    {formatScore(standing?.total ?? 0)}
+                  </td>
+                  <td className={cn(td, "text-right font-mono font-bold text-forest-green")}>
+                    #{standing?.rank ?? "—"}
+                  </td>
+                  <td className={cn(td, "text-right")}>
+                    <div className="flex justify-end gap-2">
+                      <Button onClick={() => openEdit(t)} className={btnEdit}>
+                        <Pencil className="size-3 mr-1" /> Edit
+                      </Button>
+                      <Button onClick={() => setToDelete(t)} className={btnDelete}>
+                        <Trash2 className="size-3 mr-1" /> Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
+      {/* Edit Team Modal */}
+      {editingTeam && (
+        <Dialog open={!!editingTeam} onOpenChange={(o) => !o && setEditingTeam(null)}>
+          <DialogContent className="border-kraft/45 bg-ecru-soft font-sans sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl font-bold text-espresso">
+                Edit Team: {editingTeam.name}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={saveEdit} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                  Team Name
+                </Label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  className="border-kraft/45 bg-ecru-light/60 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                  Sector / Industry Track
+                </Label>
+                <select
+                  value={editTheme}
+                  onChange={(e) => setEditTheme(e.target.value)}
+                  className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans"
+                >
+                  {TRACK_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                    Team Code
+                  </Label>
+                  <Input
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value)}
+                    className="border-kraft/45 bg-ecru-light/60 font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                    Members Count
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={editMembers}
+                    onChange={(e) => setEditMembers(e.target.value)}
+                    className="border-kraft/45 bg-ecru-light/60 font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditingTeam(null)}
+                  className="font-mono text-xs uppercase"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono text-xs font-bold uppercase tracking-wider"
+                >
+                  {savingEdit ? "Saving…" : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete Confirmation */}
       <Confirm
         open={!!toDelete}
-        busy={busy}
+        busy={deleting}
         confirmLabel="Delete Team"
         title={`Delete "${toDelete?.name}"?`}
         description={
           <>
-            This permanently removes the team and <strong>all of its scores</strong> in every
-            activity. The leaderboard will be re-ranked. The change stays in Score History.
+            This will permanently remove <strong>{toDelete?.name}</strong> and all of its scores
+            from the database. Standings and rankings will be recalculated in real-time.
           </>
         }
         onCancel={() => setToDelete(null)}
@@ -578,27 +782,28 @@ function TeamsSection({
   );
 }
 
-/* ---------- activities ---------- */
+/* ---------- activities section ---------- */
 
 const STATUSES = ["upcoming", "live", "completed", "disabled"] as const;
 
 function ActivitiesSection({
   activities,
   scores,
-  isSuper,
 }: {
   activities: Activity[];
   scores: Score[];
-  isSuper: boolean;
 }) {
   const refresh = useRefresh();
   const [name, setName] = useState("");
   const [max, setMax] = useState("100");
+  const [day, setDay] = useState("1");
   const [adding, setAdding] = useState(false);
+
   const [editing, setEditing] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editMax, setEditMax] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [toDelete, setToDelete] = useState<Activity | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -608,7 +813,7 @@ function ActivitiesSection({
     return m;
   }, [scores]);
 
-  const add = async (e: { preventDefault(): void }) => {
+  const add = async (e: React.FormEvent) => {
     e.preventDefault();
     if (adding) return;
     const n = name.trim();
@@ -623,37 +828,34 @@ function ActivitiesSection({
     }
     setAdding(true);
     try {
-      await createActivity({ data: { name: n, maxScore: m } });
-      toast.success("Activity added successfully.");
+      await addActivityData({
+        name: n,
+        maxScore: m,
+        day: Number(day) || 1,
+        status: "upcoming",
+      });
+      toast.success(`Activity "${n}" added to database.`);
       setName("");
       setMax("100");
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to add activity. Please try again."));
+      toast.error(errMsg(err, "Failed to add activity."));
     } finally {
       setAdding(false);
     }
   };
 
-  const update = async (
-    a: Activity,
-    patch: { name?: string; maxScore?: number; status?: (typeof STATUSES)[number] },
-    msg: string,
-  ) => {
-    setBusyId(a.id);
+  const updateStatus = async (a: Activity, status: Activity["status"]) => {
     try {
-      await updateActivity({ data: { id: a.id, ...patch } });
-      toast.success(msg);
-      setEditing(null);
+      await updateActivityData(a.id, { status });
+      toast.success(`Activity "${a.name}" status updated to ${status}.`);
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to update activity. Please try again."));
-    } finally {
-      setBusyId(null);
+      toast.error(errMsg(err, "Failed to update status."));
     }
   };
 
-  const saveEdit = (a: Activity) => {
+  const saveEdit = async (a: Activity) => {
     const n = editName.trim();
     const m = Number(editMax);
     if (!n) {
@@ -661,166 +863,201 @@ function ActivitiesSection({
       return;
     }
     if (!Number.isInteger(m) || m < 1) {
-      toast.error("Maximum score must be a whole number of at least 1.");
+      toast.error("Maximum score must be at least 1.");
       return;
     }
-    void update(a, { name: n, maxScore: m }, "Activity updated successfully.");
+    setSavingEdit(true);
+    try {
+      await updateActivityData(a.id, { name: n, max_score: m });
+      toast.success("Activity updated successfully in database.");
+      setEditing(null);
+      await refresh();
+    } catch (err) {
+      toast.error(errMsg(err, "Failed to update activity."));
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const confirmDelete = async () => {
     if (!toDelete) return;
     setDeleting(true);
     try {
-      await deleteActivity({ data: { id: toDelete.id } });
-      toast.success("Activity deleted successfully.");
+      await deleteActivityData(toDelete.id);
+      toast.success(`Activity "${toDelete.name}" deleted from database.`);
       setToDelete(null);
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to delete activity. Please try again."));
+      toast.error(errMsg(err, "Failed to delete activity."));
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Add Activity Form */}
       <form
         onSubmit={add}
-        className={cn(panel, "grid gap-3 p-4 sm:grid-cols-[1fr_9rem_auto] sm:items-end")}
+        className={cn(
+          panel,
+          "grid gap-3.5 p-4 sm:grid-cols-[1fr_8rem_6rem_auto] sm:items-end",
+        )}
       >
         <div className="space-y-1.5">
-          <Label htmlFor="act-name">Activity Name</Label>
+          <Label htmlFor="act-name" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Activity / Round Name *
+          </Label>
           <Input
             id="act-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Pitch Perfect"
             maxLength={100}
-            className="h-11 border-line bg-ink-3/60"
+            required
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-sans"
           />
         </div>
+
         <div className="space-y-1.5">
-          <Label htmlFor="act-max">Maximum Score</Label>
+          <Label htmlFor="act-max" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Max Score *
+          </Label>
           <Input
             id="act-max"
             type="number"
             min={1}
             value={max}
             onChange={(e) => setMax(e.target.value)}
-            className="h-11 border-line bg-ink-3/60 font-mono"
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-right"
           />
         </div>
-        <Button type="submit" disabled={adding} className={cn(btnSave, "h-11 px-6")}>
-          {adding ? "Adding…" : "Add Activity"}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="act-day" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Day #
+          </Label>
+          <Input
+            id="act-day"
+            type="number"
+            min={1}
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-right"
+          />
+        </div>
+
+        <Button
+          type="submit"
+          disabled={adding}
+          className={cn(btnSave, "h-11 px-6 font-mono uppercase tracking-wider font-bold shadow-xs")}
+        >
+          {adding ? "Adding…" : "+ Add Activity"}
         </Button>
       </form>
 
-      <p className="text-xs text-muted-foreground">
-        Only <strong>live</strong> and <strong>completed</strong> activities count toward the
-        leaderboard. <strong>Disabled</strong> activities are hidden from the public and can’t be
-        scored.
+      <p className="font-mono text-xs text-muted-text">
+        ℹ️ Only <strong>live</strong> and <strong>completed</strong> activities count toward total
+        leaderboard rankings.
       </p>
 
+      {/* Activities Table */}
       <div className={cn(panel, "overflow-x-auto")}>
         <table className="w-full min-w-[760px]">
-          <thead className="border-b border-line">
+          <thead className="border-b border-kraft/35 bg-ecru-light/50">
             <tr>
               <th className={th}>Activity</th>
-              <th className={cn(th, "text-right")}>Max</th>
+              <th className={cn(th, "text-right")}>Max Score</th>
+              <th className={th}>Day</th>
               <th className={th}>Status</th>
-              <th className={cn(th, "text-right")}>Teams scored</th>
+              <th className={cn(th, "text-right")}>Teams Scored</th>
               <th className={cn(th, "text-right")}>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line/50">
-            {activities.map((a) => {
-              const locked = a.status === "completed" && !isSuper;
-              const busy = busyId === a.id;
-              return (
-                <tr key={a.id} className={a.status === "disabled" ? "opacity-60" : undefined}>
-                  <td className={td}>
+          <tbody className="divide-y divide-kraft/30 font-sans">
+            {activities.map((a) => (
+              <tr key={a.id} className="hover:bg-ecru-light/40 transition-colors">
+                <td className={td}>
+                  {editing === a.id ? (
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="h-9 border-kraft/45 bg-ecru-light/60 font-sans"
+                    />
+                  ) : (
+                    <span className="font-semibold text-espresso">{a.name}</span>
+                  )}
+                </td>
+                <td className={cn(td, "text-right font-mono font-bold")}>
+                  {editing === a.id ? (
+                    <Input
+                      type="number"
+                      min={1}
+                      value={editMax}
+                      onChange={(e) => setEditMax(e.target.value)}
+                      className="ml-auto h-9 w-24 border-kraft/45 bg-ecru-light/60 text-right font-mono"
+                    />
+                  ) : (
+                    a.max_score
+                  )}
+                </td>
+                <td className={cn(td, "font-mono text-xs text-muted-text")}>Day {a.day}</td>
+                <td className={td}>
+                  <select
+                    value={a.status}
+                    onChange={(e) => void updateStatus(a, e.target.value as Activity["status"])}
+                    className="h-9 rounded-xs border border-kraft/45 bg-ecru-light/60 px-2 text-xs font-mono font-bold uppercase tracking-wider text-espresso"
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className={cn(td, "text-right font-mono font-bold text-forest-green")}>
+                  {counts.get(a.id) ?? 0}
+                </td>
+                <td className={cn(td, "text-right")}>
+                  <div className="flex justify-end gap-2">
                     {editing === a.id ? (
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-9 border-line bg-ink-3/60"
-                      />
+                      <>
+                        <Button
+                          disabled={savingEdit}
+                          onClick={() => void saveEdit(a)}
+                          className={btnSave}
+                        >
+                          {savingEdit ? "Saving…" : "Save"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setEditing(null)}
+                          className="h-9 font-mono text-xs uppercase"
+                        >
+                          Cancel
+                        </Button>
+                      </>
                     ) : (
-                      <span className="font-medium">{a.name}</span>
+                      <>
+                        <Button
+                          onClick={() => {
+                            setEditing(a.id);
+                            setEditName(a.name);
+                            setEditMax(String(a.max_score));
+                          }}
+                          className={btnEdit}
+                        >
+                          <Pencil className="size-3 mr-1" /> Edit
+                        </Button>
+                        <Button onClick={() => setToDelete(a)} className={btnDelete}>
+                          <Trash2 className="size-3 mr-1" /> Delete
+                        </Button>
+                      </>
                     )}
-                  </td>
-                  <td className={cn(td, "text-right font-mono")}>
-                    {editing === a.id ? (
-                      <Input
-                        type="number"
-                        min={1}
-                        value={editMax}
-                        onChange={(e) => setEditMax(e.target.value)}
-                        className="ml-auto h-9 w-24 border-line bg-ink-3/60 text-right font-mono"
-                      />
-                    ) : (
-                      a.max_score
-                    )}
-                  </td>
-                  <td className={td}>
-                    <select
-                      value={a.status}
-                      disabled={busy || locked}
-                      onChange={(e) =>
-                        void update(
-                          a,
-                          { status: e.target.value as (typeof STATUSES)[number] },
-                          "Activity status updated.",
-                        )
-                      }
-                      className="h-9 border border-line bg-ink-3/60 px-2 text-sm capitalize"
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className={cn(td, "text-right font-mono")}>{counts.get(a.id) ?? 0}</td>
-                  <td className={cn(td, "text-right")}>
-                    <div className="flex justify-end gap-2">
-                      {editing === a.id ? (
-                        <>
-                          <Button disabled={busy} onClick={() => saveEdit(a)} className={btnSave}>
-                            {busy ? "Saving…" : "Save"}
-                          </Button>
-                          <Button variant="ghost" onClick={() => setEditing(null)} className="h-9">
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            disabled={locked}
-                            onClick={() => {
-                              setEditing(a.id);
-                              setEditName(a.name);
-                              setEditMax(String(a.max_score));
-                            }}
-                            className={btnEdit}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            disabled={locked}
-                            onClick={() => setToDelete(a)}
-                            className={btnDelete}
-                          >
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -832,10 +1069,7 @@ function ActivitiesSection({
         title={`Delete "${toDelete?.name}"?`}
         description={
           <>
-            This removes the activity and{" "}
-            <strong>all {counts.get(toDelete?.id ?? "") ?? 0} scores</strong> entered for it. Team
-            totals and rankings will be recalculated. Consider setting it to <em>Disabled</em>{" "}
-            instead.
+            This will permanently remove the activity and all associated scores from the database.
           </>
         }
         onCancel={() => setToDelete(null)}
@@ -845,16 +1079,7 @@ function ActivitiesSection({
   );
 }
 
-/* ---------- scores ---------- */
-
-function validateScore(raw: string, a: Activity): number | string {
-  if (raw.trim() === "") return "Enter a score.";
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return "Score must be a number.";
-  if (n < 0) return "Score cannot be negative.";
-  if (n > a.max_score) return `Score cannot exceed ${a.max_score}.`;
-  return n;
-}
+/* ---------- scores section ---------- */
 
 function ScoresSection({
   teams,
@@ -864,7 +1089,6 @@ function ScoresSection({
   teams: Team[];
   activities: Activity[];
   scores: Score[];
-  isSuper: boolean;
 }) {
   const refresh = useRefresh();
   const [activityId, setActivityId] = useState<string>(
@@ -875,9 +1099,6 @@ function ScoresSection({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [toDelete, setToDelete] = useState<{ team: Team; score: Score } | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // Quick entry state
   const [qTeam, setQTeam] = useState("");
@@ -885,43 +1106,41 @@ function ScoresSection({
   const [qPts, setQPts] = useState("");
   const [qBusy, setQBusy] = useState(false);
 
+  const [toDelete, setToDelete] = useState<{ team: Team; score: Score } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const activity = activities.find((a) => a.id === activityId);
   const scoreOf = (teamId: string, actId: string) =>
     scores.find((s) => s.team_id === teamId && s.activity_id === actId);
 
-  const save = async (
-    teamId: string,
-    actId: string,
-    raw: string,
-    quiet = false,
-  ): Promise<boolean> => {
+  const saveScoreEntry = async (teamId: string, actId: string, raw: string): Promise<boolean> => {
     const a = activities.find((x) => x.id === actId);
     if (!a) {
       toast.error("Please select an activity.");
       return false;
     }
-    const v = validateScore(raw, a);
-    const team = teams.find((t) => t.id === teamId);
-    if (typeof v === "string") {
-      toast.error(`${team?.name ?? "Team"}: ${v}`);
+    const val = Number(raw);
+    if (!Number.isFinite(val) || val < 0) {
+      toast.error("Score must be a positive number.");
       return false;
     }
-    const existing = scoreOf(teamId, actId);
+    if (val > a.max_score) {
+      toast.error(`Score cannot exceed max score of ${a.max_score}.`);
+      return false;
+    }
+
+    const team = teams.find((t) => t.id === teamId);
     try {
-      const res = await upsertScore({
-        data: { teamId, activityId: actId, points: v, expectedVersion: existing?.version ?? 0 },
+      await upsertScoreData({
+        teamId,
+        activityId: actId,
+        points: val,
       });
-      if (!quiet) {
-        if (res.unchanged) {
-          toast.info("Score is already set to this value.");
-        } else {
-          toast.success(
-            existing
-              ? `Score updated for ${team?.name ?? "Team"}: ${formatScore(existing.points)} → ${formatScore(v)} pts`
-              : `Score saved for ${team?.name ?? "Team"}: ${formatScore(v)} pts`,
-          );
-        }
-      }
+
+      toast.success(
+        `Score saved for ${team?.name ?? "Team"}: ${formatScore(val)} pts in ${a.name}`,
+      );
+
       setSavedIds((s) => new Set(s).add(teamId));
       setTimeout(() => {
         setSavedIds((s) => {
@@ -930,11 +1149,11 @@ function ScoresSection({
           return n;
         });
       }, 3000);
+
+      await refresh();
       return true;
     } catch (err) {
-      toast.error(
-        `${team?.name ?? "Team"}: ${errMsg(err, "Failed to update score. Please try again.")}`,
-      );
+      toast.error(errMsg(err, "Failed to save score."));
       return false;
     }
   };
@@ -943,8 +1162,9 @@ function ScoresSection({
     if (savingIds.has(teamId)) return;
     const raw = drafts[teamId];
     if (raw === undefined || raw === "") return;
+
     setSavingIds((s) => new Set(s).add(teamId));
-    const ok = await save(teamId, activityId, raw);
+    const ok = await saveScoreEntry(teamId, activityId, raw);
     if (ok) {
       setDrafts((d) => {
         const n = { ...d };
@@ -952,7 +1172,6 @@ function ScoresSection({
         return n;
       });
     }
-    await refresh();
     setSavingIds((s) => {
       const n = new Set(s);
       n.delete(teamId);
@@ -960,33 +1179,7 @@ function ScoresSection({
     });
   };
 
-  const dirty = Object.entries(drafts).filter(([id, v]) => {
-    const cur = scoreOf(id, activityId);
-    return v.trim() !== "" && (cur ? Number(v) !== Number(cur.points) : true);
-  });
-
-  const saveAll = async () => {
-    if (bulkBusy || dirty.length === 0) return;
-    setBulkBusy(true);
-    let ok = 0;
-    const saved: string[] = [];
-    for (const [id, v] of dirty) {
-      if (await save(id, activityId, v, true)) {
-        ok++;
-        saved.push(id);
-      }
-    }
-    setDrafts((d) => {
-      const n = { ...d };
-      for (const id of saved) delete n[id];
-      return n;
-    });
-    await refresh();
-    setBulkBusy(false);
-    if (ok) toast.success(`${ok} score${ok === 1 ? "" : "s"} saved successfully.`);
-  };
-
-  const quickSave = async (e: { preventDefault(): void }) => {
+  const quickSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (qBusy) return;
     const targetAct = qAct || activityId;
@@ -995,10 +1188,9 @@ function ScoresSection({
       return;
     }
     setQBusy(true);
-    const ok = await save(qTeam, targetAct, qPts);
+    const ok = await saveScoreEntry(qTeam, targetAct, qPts);
     if (ok) {
       setQPts("");
-      await refresh();
     }
     setQBusy(false);
   };
@@ -1007,18 +1199,12 @@ function ScoresSection({
     if (!toDelete) return;
     setDeleting(true);
     try {
-      await deleteScore({
-        data: {
-          teamId: toDelete.team.id,
-          activityId: toDelete.score.activity_id,
-          expectedVersion: toDelete.score.version,
-        },
-      });
-      toast.success("Score removed successfully.");
+      await deleteScoreData(toDelete.team.id, toDelete.score.activity_id);
+      toast.success("Score removed successfully from database.");
       setToDelete(null);
       await refresh();
     } catch (err) {
-      toast.error(errMsg(err, "Failed to delete score. Please try again."));
+      toast.error(errMsg(err, "Failed to remove score."));
     } finally {
       setDeleting(false);
     }
@@ -1043,7 +1229,7 @@ function ScoresSection({
         onSubmit={quickSave}
         className={cn(
           panel,
-          "grid gap-3.5 p-4 md:grid-cols-[1.2fr_1.2fr_9rem_auto] md:items-end border-kraft/45 bg-ecru-soft shadow-sm",
+          "grid gap-3.5 p-4 md:grid-cols-[1.2fr_1.2fr_9rem_auto] md:items-end",
         )}
       >
         <div className="space-y-1.5">
@@ -1054,7 +1240,7 @@ function ScoresSection({
             id="q-team"
             value={qTeam}
             onChange={(e) => setQTeam(e.target.value)}
-            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans"
           >
             <option value="">Choose a team…</option>
             {teams
@@ -1070,7 +1256,7 @@ function ScoresSection({
 
         <div className="space-y-1.5">
           <Label htmlFor="q-act" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            2. Challenge / Activity
+            2. Challenge / Round
           </Label>
           <select
             id="q-act"
@@ -1079,7 +1265,7 @@ function ScoresSection({
               setQAct(e.target.value);
               setActivityId(e.target.value);
             }}
-            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+            className="h-11 w-full rounded-xs border border-kraft/45 bg-ecru-light/60 px-3 text-sm text-espresso font-sans"
           >
             {activities.map((a) => (
               <option key={a.id} value={a.id}>
@@ -1091,7 +1277,7 @@ function ScoresSection({
 
         <div className="space-y-1.5">
           <Label htmlFor="q-pts" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            3. Score (Max {targetQuickAct?.max_score ?? 100})
+            3. Marks (Max {targetQuickAct?.max_score ?? 100})
           </Label>
           <Input
             id="q-pts"
@@ -1102,31 +1288,17 @@ function ScoresSection({
             placeholder="e.g. 85"
             value={qPts}
             onChange={(e) => setQPts(e.target.value)}
-            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-base font-bold text-espresso text-right pr-3 focus-visible:ring-forest-green"
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-base font-bold text-espresso text-right"
           />
         </div>
 
         <Button
           type="submit"
           disabled={qBusy || !qTeam}
-          className={cn(btnSave, "h-11 px-6 bg-forest-green hover:bg-forest-dark cursor-pointer text-ecru-soft font-mono uppercase tracking-wider font-bold shadow-xs")}
+          className={cn(btnSave, "h-11 px-6 font-mono uppercase tracking-wider font-bold shadow-xs")}
         >
           {qBusy ? "Saving…" : "Save Score"}
         </Button>
-
-        {qTeam && (qAct || activityId) && (
-          <p className="text-xs font-mono text-muted-text md:col-span-4 mt-0.5">
-            Current recorded score:{" "}
-            {(() => {
-              const s = scoreOf(qTeam, qAct || activityId);
-              return s ? (
-                <strong className="text-forest-green">{formatScore(s.points)} pts</strong>
-              ) : (
-                <span className="italic">Not scored yet</span>
-              );
-            })()}
-          </p>
-        )}
       </form>
 
       {/* Main Scorer Table & Filtering */}
@@ -1134,18 +1306,17 @@ function ScoresSection({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end justify-between bg-ecru-light/60 p-3.5 rounded-md border border-kraft/35">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end flex-1">
             <div className="space-y-1 sm:w-72">
-              <Label htmlFor="bulk-act" className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
+              <Label className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
                 Selected Challenge
               </Label>
               <select
-                id="bulk-act"
                 value={activityId}
                 onChange={(e) => {
                   setActivityId(e.target.value);
                   setQAct(e.target.value);
                   setDrafts({});
                 }}
-                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans font-medium focus:outline-none focus:ring-1 focus:ring-forest-green"
+                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans"
               >
                 {activities.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -1155,19 +1326,21 @@ function ScoresSection({
               </select>
             </div>
 
-            <div className="space-y-1 sm:w-44">
+            <div className="space-y-1 sm:w-48">
               <Label className="font-mono text-[11px] uppercase tracking-wider text-muted-text font-bold">
-                Filter Track
+                Filter Sector
               </Label>
               <select
                 value={trackFilter}
                 onChange={(e) => setTrackFilter(e.target.value)}
-                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans focus:outline-none focus:ring-1 focus:ring-forest-green"
+                className="h-10 w-full rounded-xs border border-kraft/45 bg-ecru-soft px-3 text-sm text-espresso font-sans"
               >
-                <option value="all">All Tracks</option>
-                <option value="Food & Nutrition">Food & Nutrition</option>
-                <option value="Health & Fitness">Health & Fitness</option>
-                <option value="Fashion & Lifestyle">Fashion & Lifestyle</option>
+                <option value="all">All Sectors</option>
+                {TRACK_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1178,61 +1351,42 @@ function ScoresSection({
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by code or team name…"
+                placeholder="Search team by name or code…"
                 className="h-10 border-kraft/45 bg-ecru-soft font-sans text-sm"
               />
             </div>
           </div>
-
-          <Button
-            disabled={bulkBusy || dirty.length === 0}
-            onClick={() => void saveAll()}
-            className={cn(
-              btnSave,
-              "h-10 px-5 bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono uppercase tracking-wider font-bold shadow-xs whitespace-nowrap",
-            )}
-          >
-            {bulkBusy ? "Saving All…" : `Save All Changes (${dirty.length})`}
-          </Button>
         </div>
 
         {activity && (
-          <div className={cn(panel, "overflow-x-auto border-kraft/45 bg-ecru-soft shadow-md rounded-md")}>
-            <table className="w-full min-w-[640px]">
-              <thead className="border-b border-kraft/35 bg-ecru-light/70 font-mono text-[11px] uppercase tracking-wider text-muted-text">
+          <div className={cn(panel, "overflow-x-auto")}>
+            <table className="w-full min-w-[720px]">
+              <thead className="border-b border-kraft/35 bg-ecru-light/50">
                 <tr>
-                  <th className="px-4 py-3 text-left">Team & Code</th>
-                  <th className="px-3 py-3 text-left">Track</th>
-                  <th className="px-3 py-3 text-right">Recorded Score</th>
-                  <th className="px-3 py-3 text-right">
-                    New Score <span className="text-forest-green">(Max {activity.max_score})</span>
+                  <th className={th}>Team</th>
+                  <th className={th}>Sector</th>
+                  <th className={cn(th, "text-right")}>Recorded Score</th>
+                  <th className={cn(th, "text-right")}>
+                    Quick Enter Score (Max {activity.max_score})
                   </th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className={cn(th, "text-right")}>Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-kraft/20 font-sans">
+              <tbody className="divide-y divide-kraft/30 font-sans">
                 {rows.map((t) => {
                   const cur = scoreOf(t.id, activity.id);
                   const draft = drafts[t.id] ?? "";
-                  const invalid =
-                    draft !== "" && typeof validateScore(draft, activity) === "string";
-                  const busy = savingIds.has(t.id) || bulkBusy;
+                  const busy = savingIds.has(t.id);
                   const isSaved = savedIds.has(t.id);
 
                   return (
-                    <tr
-                      key={t.id}
-                      className={cn(
-                        "transition-colors duration-300 hover:bg-ecru-light/50",
-                        isSaved && "bg-forest-green/10",
-                      )}
-                    >
+                    <tr key={t.id} className="hover:bg-ecru-light/40 transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-espresso">{t.name}</div>
-                        <div className="font-mono text-[11px] text-muted-text">{t.team_code}</div>
+                        <div className="font-mono text-xs text-muted-text">{t.team_code}</div>
                       </td>
                       <td className="px-3 py-3">
-                        <span className="inline-block rounded-xs bg-kraft/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-kraft-deep font-semibold">
+                        <span className="inline-block rounded-xs bg-kraft/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-kraft-deep">
                           {t.theme}
                         </span>
                       </td>
@@ -1258,10 +1412,8 @@ function ScoresSection({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") void saveRow(t.id);
                             }}
-                            aria-invalid={invalid}
                             className={cn(
-                              "h-9 w-28 border-kraft/45 bg-ecru-light/60 text-right font-mono font-bold text-espresso text-base focus-visible:ring-forest-green",
-                              invalid && "border-destructive ring-1 ring-destructive",
+                              "h-9 w-28 border-kraft/45 bg-ecru-light/60 text-right font-mono font-bold text-espresso text-base",
                               isSaved && "border-forest-green ring-1 ring-forest-green",
                             )}
                           />
@@ -1270,14 +1422,12 @@ function ScoresSection({
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-2">
                           <Button
-                            disabled={busy || draft === "" || invalid}
+                            disabled={busy || draft === ""}
                             onClick={() => void saveRow(t.id)}
                             className={cn(
                               btnSave,
-                              "h-9 px-4 font-mono uppercase tracking-wider font-bold transition-all cursor-pointer",
-                              isSaved
-                                ? "bg-forest-green text-ecru-soft"
-                                : "bg-forest-green hover:bg-forest-dark text-ecru-soft",
+                              "h-9 px-4 font-mono uppercase tracking-wider font-bold transition-all",
+                              isSaved && "bg-forest-green text-ecru-soft",
                             )}
                           >
                             {busy ? "Saving…" : isSaved ? "Saved ✓" : cur ? "Update" : "Save"}
@@ -1286,10 +1436,7 @@ function ScoresSection({
                             <Button
                               disabled={busy}
                               onClick={() => setToDelete({ team: t, score: cur })}
-                              className={cn(
-                                btnDelete,
-                                "h-9 px-3 border-destructive/40 text-destructive hover:bg-destructive/10 font-mono uppercase tracking-wider cursor-pointer",
-                              )}
+                              className={btnDelete}
                             >
                               Clear
                             </Button>
@@ -1302,7 +1449,7 @@ function ScoresSection({
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={5} className="py-8 text-center font-mono text-sm text-muted-text">
-                      No teams match your search or filter.
+                      No teams match your filter.
                     </td>
                   </tr>
                 )}
@@ -1319,10 +1466,9 @@ function ScoresSection({
         title="Clear this team's score?"
         description={
           <>
-            {toDelete?.team.name} ({toDelete?.team.team_code}) ·{" "}
-            {activities.find((a) => a.id === toDelete?.score.activity_id)?.name} · current score{" "}
+            {toDelete?.team.name} ({toDelete?.team.team_code}) · current score{" "}
             <strong>{toDelete ? formatScore(toDelete.score.points) : ""} pts</strong>.
-            The team ranking will be automatically recalculated.
+            The ranking will be updated in real-time.
           </>
         }
         onCancel={() => setToDelete(null)}
@@ -1332,100 +1478,53 @@ function ScoresSection({
   );
 }
 
-/* ---------- history ---------- */
+/* ---------- history section ---------- */
 
-function HistorySection({ logs, loading }: { logs: HistoryLog[]; loading: boolean }) {
-  const refresh = useRefresh();
-  const [scope, setScope] = useState<"scores" | "all">("scores");
+function HistorySection({ logs, loading }: { logs: AuditLogItem[]; loading: boolean }) {
   const [search, setSearch] = useState("");
-  const [target, setTarget] = useState<HistoryLog | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const q = search.trim().toLowerCase();
-  const shown = logs
-    .filter((l) => scope === "all" || l.entity_type === "score")
-    .filter(
-      (l) => !q || describe(l).toLowerCase().includes(q) || l.performer.toLowerCase().includes(q),
-    );
-
-  const canRollback = (l: HistoryLog) => {
-    if (l.entity_type !== "score") return false;
-    const v = (l.new_value ?? l.old_value) as { team_id?: string } | null;
-    return !!v?.team_id;
-  };
-
-  const doRollback = async () => {
-    if (!target) return;
-    setBusy(true);
-    try {
-      await rollbackScore({ data: { logId: target.id } });
-      toast.success("Score rolled back successfully.");
-      setTarget(null);
-      await refresh();
-    } catch (err) {
-      toast.error(errMsg(err, "Failed to roll back score. Please try again."));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const o = target?.old_value as ScoreVal;
-  const n = target?.new_value as ScoreVal;
+  const shown = logs.filter(
+    (l) => !q || describe(l).toLowerCase().includes(q) || l.performer.toLowerCase().includes(q),
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="flex">
-          {(["scores", "all"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setScope(s)}
-              className={cn(
-                "h-11 border border-line px-4 text-sm",
-                scope === s ? "bg-primary text-primary-foreground" : "bg-ink-2/80",
-              )}
-            >
-              {s === "scores" ? "Score changes" : "All changes"}
-            </button>
-          ))}
-        </div>
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search team, activity or admin…"
-          className="h-11 flex-1 border-line bg-ink-2/80"
-        />
-      </div>
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search audit trail by team, round or admin…"
+        className="h-11 border-kraft/45 bg-ecru-soft font-sans text-sm"
+      />
 
       <div className={cn(panel, "overflow-x-auto")}>
-        <table className="w-full min-w-[820px]">
-          <thead className="border-b border-line">
+        <table className="w-full min-w-[760px]">
+          <thead className="border-b border-kraft/35 bg-ecru-light/50">
             <tr>
               <th className={th}>Time</th>
-              <th className={th}>Team · Activity · Change</th>
               <th className={th}>Action</th>
-              <th className={th}>By</th>
-              <th className={cn(th, "text-right")}>Rollback</th>
+              <th className={th}>Details</th>
+              <th className={th}>Performer</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line/50">
+          <tbody className="divide-y divide-kraft/30 font-sans">
             {loading && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={4} className="px-3 py-6 text-center font-mono text-sm text-muted-text">
                   Loading history…
                 </td>
               </tr>
             )}
             {!loading && shown.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No history yet.
+                <td colSpan={4} className="px-3 py-6 text-center font-mono text-sm text-muted-text">
+                  No changes recorded yet.
                 </td>
               </tr>
             )}
             {shown.map((l) => (
-              <tr key={l.id}>
-                <td className={cn(td, "whitespace-nowrap font-mono text-xs text-muted-foreground")}>
+              <tr key={l.id} className="hover:bg-ecru-light/40 transition-colors">
+                <td className={cn(td, "whitespace-nowrap font-mono text-xs text-muted-text")}>
                   {new Date(l.created_at).toLocaleString("en-IN", {
                     day: "2-digit",
                     month: "short",
@@ -1434,46 +1533,18 @@ function HistorySection({ logs, loading }: { logs: HistoryLog[]; loading: boolea
                     hour12: true,
                   })}
                 </td>
-                <td className={td}>{describe(l)}</td>
-                <td className={cn(td, "whitespace-nowrap font-semibold")}>
+                <td className={cn(td, "font-semibold text-espresso")}>
                   {ACTION_LABEL[l.action] ?? l.action}
                 </td>
-                <td className={cn(td, "max-w-[12rem] truncate text-xs text-muted-foreground")}>
+                <td className={td}>{describe(l)}</td>
+                <td className={cn(td, "font-mono text-xs text-forest-green font-semibold")}>
                   {l.performer}
-                </td>
-                <td className={cn(td, "text-right")}>
-                  {canRollback(l) && (
-                    <Button onClick={() => setTarget(l)} className={btnRollback}>
-                      Rollback
-                    </Button>
-                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      <Confirm
-        open={!!target}
-        busy={busy}
-        tone="warn"
-        confirmLabel="Roll Back"
-        title="Roll back this score change?"
-        description={
-          <>
-            {n?.team_name ?? o?.team_name} · {n?.activity_name ?? o?.activity_name}
-            <br />
-            The score will go from <strong>{n?.points ?? "no score"}</strong> back to{" "}
-            <strong>{o?.points ?? "no score (entry removed)"}</strong>. Totals and rankings will be
-            recalculated, and the rollback will be recorded here.
-          </>
-        }
-        onCancel={() => setTarget(null)}
-        onConfirm={() => void doRollback()}
-      />
     </div>
   );
 }
-
-/* ---------- admin users ---------- */

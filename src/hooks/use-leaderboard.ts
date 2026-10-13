@@ -8,28 +8,16 @@ import {
   type Standing,
   type Team,
 } from "@/lib/leaderboard";
-
-async function fetchAll() {
-  const [teamsRes, activitiesRes, scoresRes] = await Promise.all([
-    supabase.from("teams").select("*").order("team_code"),
-    supabase.from("activities").select("*").order("sort_order"),
-    supabase.from("scores").select("*"),
-  ]);
-  if (teamsRes.error) throw teamsRes.error;
-  if (activitiesRes.error) throw activitiesRes.error;
-  if (scoresRes.error) throw scoresRes.error;
-  return {
-    teams: teamsRes.data as Team[],
-    activities: activitiesRes.data as Activity[],
-    scores: scoresRes.data as Score[],
-  };
-}
+import {
+  fetchAllLeaderboardData,
+  subscribeToDataChanges,
+} from "@/lib/data-service";
 
 export function useLeaderboard() {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["leaderboard"],
-    queryFn: fetchAll,
+    queryFn: fetchAllLeaderboardData,
     refetchOnWindowFocus: true,
   });
 
@@ -38,6 +26,14 @@ export function useLeaderboard() {
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // 1. Local & cross-tab real-time sync
+    const unsubscribeLocal = subscribeToDataChanges(() => {
+      setLiveFlash("Leaderboard updated");
+      setLastUpdated(new Date());
+      void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+    });
+
+    // 2. Supabase postgres real-time sync
     const channel = supabase
       .channel("leaderboard-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "scores" }, () => {
@@ -56,7 +52,9 @@ export function useLeaderboard() {
         void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
       })
       .subscribe();
+
     return () => {
+      unsubscribeLocal();
       void supabase.removeChannel(channel);
     };
   }, [queryClient]);
