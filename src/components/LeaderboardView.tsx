@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Maximize, Search, Trophy, Sparkles, ShieldCheck } from "lucide-react";
+import { Maximize, Search, Trophy, Sparkles } from "lucide-react";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { formatScore, formatTime, type Standing } from "@/lib/leaderboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -197,7 +197,7 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
             <div className="hidden border border-kraft/35 bg-ecru-soft/80 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-text rounded-xs lg:block">
               Updated {lastUpdated ? formatTime(lastUpdated) : "—"}
             </div>
-            {/* Navigation Switcher: Public | Display | Admin */}
+            {/* Navigation Switcher: Public | Display */}
             <div className="flex items-center gap-1 border border-kraft/40 bg-ecru-soft/80 p-1 rounded-xs shadow-xs">
               <Link
                 to="/"
@@ -220,13 +220,6 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
                 )}
               >
                 Display
-              </Link>
-              <Link
-                to="/admin"
-                className="flex items-center gap-1 bg-kraft/15 hover:bg-forest-green hover:text-ecru-soft px-3 py-1 font-mono text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.15em] text-kraft-deep rounded-xs transition-colors border border-kraft/30"
-              >
-                <ShieldCheck className="size-3.5" />
-                <span>Admin</span>
               </Link>
             </div>
 
@@ -515,14 +508,6 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
           </div>
           <div className="flex items-center gap-3">
             <span>Where Business Meets Innovation · 23–24 October 2026</span>
-            <span className="text-kraft/40">·</span>
-            <Link
-              to="/admin"
-              className="inline-flex items-center gap-1 text-forest-green hover:text-forest-dark font-semibold tracking-wider hover:underline"
-            >
-              <ShieldCheck className="size-3" />
-              <span>Admin Console</span>
-            </Link>
           </div>
         </footer>
       </div>

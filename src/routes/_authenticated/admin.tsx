@@ -27,6 +27,7 @@ import {
   deleteScoreData,
   deleteTeamData,
   getAuditLogs,
+  seedOfficialTeamsData,
   updateActivityData,
   updateTeamData,
   upsertScoreData,
@@ -539,6 +540,20 @@ function TeamsSection({
     }
   };
 
+  const [seedingExcel, setSeedingExcel] = useState(false);
+  const handleSeedExcel = async () => {
+    setSeedingExcel(true);
+    try {
+      await seedOfficialTeamsData();
+      toast.success("All 26 official BizzNNovate teams loaded from Excel tracker!");
+      await refresh();
+    } catch (err) {
+      toast.error(errMsg(err, "Failed to load teams."));
+    } finally {
+      setSeedingExcel(false);
+    }
+  };
+
   const handleBulkImport = async (e: React.FormEvent) => {
     e.preventDefault();
     const lines = bulkInput.trim().split("\n").map((l) => l.trim()).filter(Boolean);
@@ -738,7 +753,16 @@ function TeamsSection({
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={seedingExcel}
+            onClick={handleSeedExcel}
+            className="h-11 border-forest-green/50 bg-forest-green/10 text-forest-green hover:bg-forest-green hover:text-ecru-soft font-mono text-xs uppercase tracking-wider font-semibold cursor-pointer transition-colors"
+          >
+            {seedingExcel ? "Syncing…" : "Sync Excel Teams (26)"}
+          </Button>
           <Button
             type="button"
             variant="outline"
