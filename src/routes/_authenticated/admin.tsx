@@ -22,6 +22,7 @@ import { useLeaderboard } from "@/hooks/use-leaderboard";
 import {
   addActivityData,
   addTeamData,
+  clearAllTeamsData,
   deleteActivityData,
   deleteScoreData,
   deleteTeamData,
@@ -407,6 +408,7 @@ function TeamsSection({
 }) {
   const refresh = useRefresh();
   const [name, setName] = useState("");
+  const [business, setBusiness] = useState("");
   const [theme, setTheme] = useState(TRACK_OPTIONS[0]);
   const [teamCode, setTeamCode] = useState("");
   const [members, setMembers] = useState("4");
@@ -419,11 +421,21 @@ function TeamsSection({
   // Edit Team state
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editName, setEditName] = useState("");
+  const [editBusiness, setEditBusiness] = useState("");
   const [editTheme, setEditTheme] = useState("");
   const [editCode, setEditCode] = useState("");
   const [editMembers, setEditMembers] = useState("");
   const [editCapital, setEditCapital] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Bulk Import state
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+
+  // Clear all confirmation
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const [toDelete, setToDelete] = useState<Team | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -441,6 +453,7 @@ function TeamsSection({
       await addTeamData({
         name: n,
         theme: theme,
+        acquired_business: business.trim() || undefined,
         team_code: teamCode.trim() || undefined,
         members_count: Number(members) || 4,
         initial_capital: Number(capital) || 100000,
@@ -448,6 +461,7 @@ function TeamsSection({
       });
       toast.success(`Team "${n}" added and saved to database.`);
       setName("");
+      setBusiness("");
       setTeamCode("");
       await refresh();
     } catch (err) {
@@ -460,10 +474,11 @@ function TeamsSection({
   const openEdit = (t: Team) => {
     setEditingTeam(t);
     setEditName(t.name);
+    setEditBusiness(t.acquired_business ?? "");
     setEditTheme(t.theme);
     setEditCode(t.team_code);
     setEditMembers(String(t.members_count || 4));
-    setEditCapital(String(t.current_capital || 100000));
+    setEditCapital(String(t.current_capital || t.initial_capital || 100000));
   };
 
   const saveEdit = async (e: React.FormEvent) => {
@@ -478,10 +493,12 @@ function TeamsSection({
     try {
       await updateTeamData(editingTeam.id, {
         name: n,
+        acquired_business: editBusiness.trim() || null,
         theme: editTheme,
         team_code: editCode.trim() || editingTeam.team_code,
         members_count: Number(editMembers) || 4,
         current_capital: Number(editCapital) || 100000,
+        initial_capital: Number(editCapital) || 100000,
       });
       toast.success(`Team "${n}" updated successfully in database.`);
       setEditingTeam(null);
@@ -508,11 +525,73 @@ function TeamsSection({
     }
   };
 
+  const handleClearAll = async () => {
+    setClearingAll(true);
+    try {
+      await clearAllTeamsData();
+      toast.success("All sample teams and scores have been cleared. Ready for actual data!");
+      setShowClearConfirm(false);
+      await refresh();
+    } catch (err) {
+      toast.error(errMsg(err, "Failed to clear teams."));
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
+  const handleBulkImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const lines = bulkInput.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      toast.error("Please enter at least one team.");
+      return;
+    }
+    setBulkImporting(true);
+    let count = 0;
+    try {
+      for (const line of lines) {
+        // Formats supported:
+        // Team Name, Business Name, Sector Track, Capital
+        // OR Team Name | Business Name | Sector Track | Capital
+        const sep = line.includes("|") ? "|" : ",";
+        const parts = line.split(sep).map((p) => p.trim());
+        const tName = parts[0];
+        const tBiz = parts[1] || "";
+        const tTrack = parts[2] || TRACK_OPTIONS[0];
+        const tCap = Number(parts[3]) || 100000;
+
+        if (tName) {
+          try {
+            await addTeamData({
+              name: tName,
+              acquired_business: tBiz || undefined,
+              theme: TRACK_OPTIONS.includes(tTrack) ? tTrack : TRACK_OPTIONS[0],
+              initial_capital: tCap,
+              current_capital: tCap,
+            });
+            count++;
+          } catch {}
+        }
+      }
+      toast.success(`Successfully imported ${count} team(s) into database!`);
+      setShowBulkModal(false);
+      setBulkInput("");
+      await refresh();
+    } catch (err) {
+      toast.error(errMsg(err, "Bulk import had errors."));
+    } finally {
+      setBulkImporting(false);
+    }
+  };
+
   const q = search.trim().toLowerCase();
   const filtered = teams
     .filter((t) => {
       const matchQ =
-        !q || t.name.toLowerCase().includes(q) || t.team_code.toLowerCase().includes(q);
+        !q ||
+        t.name.toLowerCase().includes(q) ||
+        t.team_code.toLowerCase().includes(q) ||
+        (t.acquired_business && t.acquired_business.toLowerCase().includes(q));
       const matchTrack = filterTrack === "all" || t.theme === filterTrack;
       return matchQ && matchTrack;
     })
@@ -525,27 +604,41 @@ function TeamsSection({
         onSubmit={add}
         className={cn(
           panel,
-          "grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-5 items-end",
+          "grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-6 items-end",
         )}
       >
         <div className="space-y-1.5 lg:col-span-2">
           <Label htmlFor="team-name" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            Team Name *
+            1. Team Name *
           </Label>
           <Input
             id="team-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. NutriBloom Labs"
+            placeholder="e.g. EcoBite Labs"
             maxLength={100}
             required
             className="h-11 border-kraft/45 bg-ecru-light/60 font-sans"
           />
         </div>
 
+        <div className="space-y-1.5 lg:col-span-2">
+          <Label htmlFor="team-biz" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            2. Business / Venture Name
+          </Label>
+          <Input
+            id="team-biz"
+            value={business}
+            onChange={(e) => setBusiness(e.target.value)}
+            placeholder="e.g. Smart Bioplastic Packaging"
+            maxLength={150}
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-sans"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="team-theme" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            Sector / Industry Track *
+            3. Sector / Track *
           </Label>
           <select
             id="team-theme"
@@ -562,8 +655,24 @@ function TeamsSection({
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="team-cap" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            4. Capital (₹)
+          </Label>
+          <Input
+            id="team-cap"
+            type="number"
+            min={0}
+            step="1000"
+            value={capital}
+            onChange={(e) => setCapital(e.target.value)}
+            placeholder="100000"
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-sm text-right"
+          />
+        </div>
+
+        <div className="space-y-1.5 sm:col-span-1">
           <Label htmlFor="team-code" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            Code (Auto if blank)
+            Code (Auto)
           </Label>
           <Input
             id="team-code"
@@ -575,28 +684,45 @@ function TeamsSection({
           />
         </div>
 
-        <Button
-          type="submit"
-          disabled={adding}
-          className={cn(btnSave, "h-11 w-full font-mono uppercase tracking-wider font-bold shadow-xs")}
-        >
-          {adding ? "Saving…" : "+ Add Team"}
-        </Button>
+        <div className="space-y-1.5 sm:col-span-1">
+          <Label htmlFor="team-mem" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+            Members
+          </Label>
+          <Input
+            id="team-mem"
+            type="number"
+            min={1}
+            max={20}
+            value={members}
+            onChange={(e) => setMembers(e.target.value)}
+            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-sm text-right"
+          />
+        </div>
+
+        <div className="lg:col-span-4 flex items-center justify-end">
+          <Button
+            type="submit"
+            disabled={adding}
+            className={cn(btnSave, "h-11 px-8 font-mono uppercase tracking-wider font-bold shadow-xs")}
+          >
+            {adding ? "Saving…" : "+ Add Team"}
+          </Button>
+        </div>
       </form>
 
-      {/* Filter and Search Bar */}
+      {/* Filter, Search & Bulk Actions Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3.5 size-4 text-muted-text" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={`Search ${teams.length} teams by name or code…`}
+            placeholder={`Search ${teams.length} teams by name, business or code…`}
             className="h-11 pl-9 border-kraft/45 bg-ecru-soft font-sans text-sm"
           />
         </div>
 
-        <div className="flex items-center gap-2 sm:w-64">
+        <div className="flex items-center gap-2 sm:w-60">
           <Filter className="size-4 text-muted-text shrink-0" />
           <select
             value={filterTrack}
@@ -611,16 +737,38 @@ function TeamsSection({
             ))}
           </select>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowBulkModal(true)}
+            className="h-11 border-kraft/50 bg-ecru-soft font-mono text-xs uppercase tracking-wider font-semibold text-espresso hover:bg-kraft/20 cursor-pointer"
+          >
+            Bulk Paste Teams
+          </Button>
+          {teams.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowClearConfirm(true)}
+              className="h-11 border-destructive/40 text-destructive hover:bg-destructive/10 font-mono text-xs uppercase tracking-wider font-semibold cursor-pointer"
+            >
+              Clear Demo Teams
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Teams Table */}
       <div className={cn(panel, "overflow-x-auto")}>
-        <table className="w-full min-w-[700px]">
+        <table className="w-full min-w-[800px]">
           <thead className="border-b border-kraft/35 bg-ecru-light/50">
             <tr>
               <th className={th}>Code</th>
-              <th className={th}>Team Name</th>
+              <th className={th}>Team & Business / Venture</th>
               <th className={th}>Sector / Track</th>
+              <th className={cn(th, "text-right")}>Capital</th>
               <th className={cn(th, "text-right")}>Members</th>
               <th className={cn(th, "text-right")}>Total Score</th>
               <th className={cn(th, "text-right")}>Rank</th>
@@ -630,8 +778,8 @@ function TeamsSection({
           <tbody className="divide-y divide-kraft/30 font-sans">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center font-mono text-sm text-muted-text">
-                  No teams found. Use "+ Add Team" above to register teams.
+                <td colSpan={8} className="px-3 py-8 text-center font-mono text-sm text-muted-text">
+                  No teams found. Use the form above to add your actual teams.
                 </td>
               </tr>
             )}
@@ -642,13 +790,25 @@ function TeamsSection({
                   <td className={cn(td, "font-mono font-bold text-forest-green")}>
                     {t.team_code}
                   </td>
-                  <td className={cn(td, "font-semibold text-espresso")}>
-                    {t.name}
+                  <td className={td}>
+                    <div className="font-semibold text-espresso">{t.name}</div>
+                    {t.acquired_business ? (
+                      <div className="font-sans text-xs text-kraft-deep font-medium mt-0.5">
+                        💼 {t.acquired_business}
+                      </div>
+                    ) : (
+                      <div className="font-mono text-[10px] text-muted-text/60 italic mt-0.5">
+                        No business specified
+                      </div>
+                    )}
                   </td>
                   <td className={td}>
                     <span className="inline-block rounded-xs bg-kraft/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-kraft-deep">
                       {t.theme}
                     </span>
+                  </td>
+                  <td className={cn(td, "text-right font-mono font-bold text-espresso text-sm")}>
+                    {formatCapital(t.current_capital || t.initial_capital || 0)}
                   </td>
                   <td className={cn(td, "text-right font-mono text-xs text-muted-text")}>
                     {t.members_count || 4}
@@ -700,6 +860,18 @@ function TeamsSection({
 
               <div className="space-y-1.5">
                 <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                  Business / Venture Name
+                </Label>
+                <Input
+                  value={editBusiness}
+                  onChange={(e) => setEditBusiness(e.target.value)}
+                  placeholder="e.g. Smart Bioplastic Packaging"
+                  className="border-kraft/45 bg-ecru-light/60 font-sans"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
                   Sector / Industry Track
                 </Label>
                 <select
@@ -715,7 +887,7 @@ function TeamsSection({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
                     Team Code
@@ -728,7 +900,20 @@ function TeamsSection({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-                    Members Count
+                    Capital (₹)
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="1000"
+                    value={editCapital}
+                    onChange={(e) => setEditCapital(e.target.value)}
+                    className="border-kraft/45 bg-ecru-light/60 font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
+                    Members
                   </Label>
                   <Input
                     type="number"
@@ -753,7 +938,7 @@ function TeamsSection({
                 <Button
                   type="submit"
                   disabled={savingEdit}
-                  className="bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono text-xs font-bold uppercase tracking-wider"
+                  className="bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono text-xs font-bold uppercase tracking-wider cursor-pointer"
                 >
                   {savingEdit ? "Saving…" : "Save Changes"}
                 </Button>
@@ -762,6 +947,63 @@ function TeamsSection({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Bulk Import Modal */}
+      {showBulkModal && (
+        <Dialog open={showBulkModal} onOpenChange={(o) => !o && setShowBulkModal(false)}>
+          <DialogContent className="border-kraft/45 bg-ecru-soft font-sans sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl font-bold text-espresso">
+                Bulk Import Teams
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleBulkImport} className="space-y-3 pt-2">
+              <p className="font-sans text-xs text-muted-text">
+                Har line par ek team enter karein format mein:
+                <br />
+                <code className="font-mono font-bold text-espresso bg-kraft/15 px-1 py-0.5 rounded text-[11px]">
+                  Team Name, Business Name, Sector Track, Capital
+                </code>
+              </p>
+              <textarea
+                rows={6}
+                value={bulkInput}
+                onChange={(e) => setBulkInput(e.target.value)}
+                placeholder={`NutriSpark, Organic Oat Bars, Food & Nutrition, 150000\nPulseWear, Smart Posture Tracker, Health & Fitness, 120000\nAuraSilk, Vegan Silk Apparel, Fashion & Lifestyle, 100000`}
+                className="w-full rounded-xs border border-kraft/45 bg-ecru-light/60 p-3 font-mono text-xs text-espresso focus:outline-none focus:ring-1 focus:ring-forest-green"
+              />
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowBulkModal(false)}
+                  className="font-mono text-xs uppercase"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={bulkImporting || !bulkInput.trim()}
+                  className="bg-forest-green hover:bg-forest-dark text-ecru-soft font-mono text-xs font-bold uppercase tracking-wider cursor-pointer"
+                >
+                  {bulkImporting ? "Importing…" : "Import All Teams"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Clear All Confirmation */}
+      <Confirm
+        open={showClearConfirm}
+        busy={clearingAll}
+        confirmLabel="Clear All Teams"
+        title="Clear all sample teams and scores?"
+        description="Yeh sabhi sample/demo teams aur unke purane scores ko database se clean kar dega, taaki aap apni real teams fresh enter kar sakein."
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={() => void handleClearAll()}
+      />
 
       {/* Delete Confirmation */}
       <Confirm

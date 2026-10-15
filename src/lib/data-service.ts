@@ -377,6 +377,7 @@ export async function addTeamData(params: {
   name: string;
   theme: string;
   team_code?: string;
+  acquired_business?: string;
   members_count?: number;
   initial_capital?: number;
   current_capital?: number;
@@ -405,7 +406,7 @@ export async function addTeamData(params: {
     team_code: code,
     theme: params.theme || "Food & Nutrition",
     members_count: params.members_count ?? 4,
-    acquired_business: null,
+    acquired_business: params.acquired_business?.trim() || null,
     initial_capital: params.initial_capital ?? 100000,
     current_capital: params.current_capital ?? params.initial_capital ?? 100000,
     status: "active",
@@ -424,6 +425,7 @@ export async function addTeamData(params: {
         team_code: newTeam.team_code,
         name: newTeam.name,
         theme: newTeam.theme,
+        acquired_business: newTeam.acquired_business,
         members_count: newTeam.members_count,
         initial_capital: newTeam.initial_capital,
         current_capital: newTeam.current_capital,
@@ -459,6 +461,10 @@ export async function updateTeamData(
     updated.name = trimmed;
   }
 
+  if (patch.acquired_business !== undefined) {
+    updated.acquired_business = patch.acquired_business?.trim() || null;
+  }
+
   local.teams[idx] = updated;
   saveLocalSnapshot(local);
   logAudit("team_update", "team", id, oldTeam, updated);
@@ -470,6 +476,7 @@ export async function updateTeamData(
       await supabase.from("teams").update({
         name: updated.name,
         theme: updated.theme,
+        acquired_business: updated.acquired_business,
         team_code: updated.team_code,
         members_count: updated.members_count,
         current_capital: updated.current_capital,
@@ -481,6 +488,25 @@ export async function updateTeamData(
   })();
 
   return updated;
+}
+
+export async function clearAllTeamsData(): Promise<void> {
+  const local = loadLocalSnapshot();
+  const beforeCount = local.teams.length;
+  local.teams = [];
+  local.scores = [];
+  saveLocalSnapshot(local);
+  logAudit("teams_clear_all", "team", null, { previousTeams: beforeCount }, null);
+  notifyDataChanged();
+
+  void (async () => {
+    try {
+      await supabase.from("scores").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      await supabase.from("teams").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    } catch (e) {
+      console.warn("Supabase clear teams notice:", e);
+    }
+  })();
 }
 
 export async function deleteTeamData(id: string): Promise<void> {
