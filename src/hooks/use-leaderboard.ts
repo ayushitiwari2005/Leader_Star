@@ -19,6 +19,7 @@ export function useLeaderboard() {
     queryKey: ["leaderboard"],
     queryFn: fetchAllLeaderboardData,
     refetchOnWindowFocus: true,
+    refetchInterval: 1200, // Real-time background sync every 1.2 seconds
   });
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -28,28 +29,32 @@ export function useLeaderboard() {
   useEffect(() => {
     // 1. Local & cross-tab real-time sync
     const unsubscribeLocal = subscribeToDataChanges(() => {
-      setLiveFlash("Leaderboard updated");
+      setLiveFlash("Live: Scores updated");
       setLastUpdated(new Date());
       void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      void queryClient.refetchQueries({ queryKey: ["leaderboard"] });
     });
 
     // 2. Supabase postgres real-time sync
     const channel = supabase
       .channel("leaderboard-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "scores" }, () => {
-        setLiveFlash("Scores updated");
+        setLiveFlash("Live: Scores updated");
         setLastUpdated(new Date());
         void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+        void queryClient.refetchQueries({ queryKey: ["leaderboard"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => {
-        setLiveFlash("Teams updated");
+        setLiveFlash("Live: Teams updated");
         setLastUpdated(new Date());
         void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+        void queryClient.refetchQueries({ queryKey: ["leaderboard"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, () => {
-        setLiveFlash("Activities updated");
+        setLiveFlash("Live: Activities updated");
         setLastUpdated(new Date());
         void queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+        void queryClient.refetchQueries({ queryKey: ["leaderboard"] });
       })
       .subscribe();
 

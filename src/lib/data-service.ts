@@ -126,6 +126,8 @@ interface DbSnapshot {
   version: number;
 }
 
+const PING_KEY = "leader_star_sync_ping_v2";
+
 // Cross-tab broadcast channel
 let broadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -136,14 +138,25 @@ if (typeof window !== "undefined" && "BroadcastChannel" in window) {
   }
 }
 
-function notifyDataChanged() {
+export function notifyDataChanged() {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("leader_star_data_changed"));
+
+  // 1. Same-window custom event
+  window.dispatchEvent(
+    new CustomEvent("leader_star_data_changed", { detail: { timestamp: Date.now() } }),
+  );
+
+  // 2. BroadcastChannel for active browser tabs
   if (broadcastChannel) {
     try {
       broadcastChannel.postMessage({ type: "SYNC", timestamp: Date.now() });
     } catch {}
   }
+
+  // 3. LocalStorage ping for ALL other tabs/windows (100% reliable across all browsers)
+  try {
+    localStorage.setItem(PING_KEY, String(Date.now()));
+  } catch {}
 }
 
 export function subscribeToDataChanges(callback: () => void): () => void {
@@ -153,7 +166,9 @@ export function subscribeToDataChanges(callback: () => void): () => void {
   window.addEventListener("leader_star_data_changed", handleCustomEvent);
 
   const handleStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY || e.key === LOGS_KEY) callback();
+    if (e.key === STORAGE_KEY || e.key === LOGS_KEY || e.key === PING_KEY) {
+      callback();
+    }
   };
   window.addEventListener("storage", handleStorage);
 
@@ -181,7 +196,11 @@ function loadLocalSnapshot(): DbSnapshot {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed.teams) && Array.isArray(parsed.activities) && Array.isArray(parsed.scores)) {
+      if (
+        Array.isArray(parsed.teams) &&
+        Array.isArray(parsed.activities) &&
+        Array.isArray(parsed.scores)
+      ) {
         return parsed;
       }
     }
@@ -273,33 +292,74 @@ export async function fetchAllLeaderboardData(): Promise<{
       supabase.from("scores").select("*"),
     ]);
 
-    let remoteTeams = teamsRes.data as Team[] | null;
-    let remoteActivities = activitiesRes.data as Activity[] | null;
-    let remoteScores = scoresRes.data as Score[] | null;
+    const remoteTeams = teamsRes.data as Team[] | null;
+    const remoteActivities = activitiesRes.data as Activity[] | null;
+    const remoteScores = scoresRes.data as Score[] | null;
 
-    // If Supabase returned non-empty data, blend or prefer remote while preserving recent local additions
-    if (remoteTeams && remoteTeams.length > 0) {
-      // Merge: Keep any newly added local teams not yet synced
-      const remoteIds = new Set(remoteTeams.map((t) => t.id));
-      const localOnly = local.teams.filter((t) => !remoteIds.has(t.id));
-      const mergedTeams = [...remoteTeams, ...localOnly];
-
-      const mergedActivities = remoteActivities && remoteActivities.length > 0 ? remoteActivities : local.activities;
-      const mergedScores = remoteScores && remoteScores.length > 0 ? remoteScores : local.scores;
-
-      const mergedSnap: DbSnapshot = {
-        teams: mergedTeams,
-        activities: mergedActivities,
-        scores: mergedScores,
-        version: local.version + 1,
-      };
-      saveLocalSnapshot(mergedSnap);
-      return {
-        teams: mergedTeams,
-        activities: mergedActivities,
-        scores: mergedScores,
-      };
+    // 1. Intelligent merge of Teams: remote + local overrides
+    const teamMap = new Map<string, Team>();
+    for (const t of remoteTeams ?? []) teamMap.set(t.id, t);
+    for (const t of local.teams) {
+      if (!teamMap.has(t.id)) {
+        teamMap.set(t.id, t);
+      } else {
+        const rem = teamMap.get(t.id)!;
+        teamMap.set(t.id, { ...rem, ...t });
+      }
     }
+    const mergedTeams = Array.from(teamMap.values()).sort((a, b) =>
+      a.team_code.localeCompare(b.team_code),
+    );
+
+    // 2. Intelligent merge of Activities: remote + local overrides
+    const actMap = new Map<string, Activity>();
+    for (const a of remoteActivities ?? []) actMap.set(a.id, a);
+    for (const a of local.activities) {
+      if (!actMap.has(a.id)) {
+        actMap.set(a.id, a);
+      } else {
+        const rem = actMap.get(a.id)!;
+        actMap.set(a.id, { ...rem, ...a });
+      }
+    }
+    const mergedActivities = Array.from(actMap.values()).sort(
+      (a, b) => a.sort_order - b.sort_order,
+    );
+
+    // 3. CRITICAL: Intelligent merge of Scores!
+    // Start with remote scores, then overlay local scores (local always preserves recent inputs)
+    const scoreMap = new Map<string, Score>();
+    for (const s of remoteScores ?? []) {
+      scoreMap.set(`${s.team_id}:${s.activity_id}`, s);
+    }
+    for (const s of local.scores) {
+      const key = `${s.team_id}:${s.activity_id}`;
+      const rem = scoreMap.get(key);
+      if (!rem) {
+        scoreMap.set(key, s);
+      } else {
+        const localTime = new Date(s.updated_at || 0).getTime();
+        const remTime = new Date(rem.updated_at || 0).getTime();
+        if (localTime >= remTime || s.points !== rem.points) {
+          scoreMap.set(key, s);
+        }
+      }
+    }
+    const mergedScores = Array.from(scoreMap.values());
+
+    const mergedSnap: DbSnapshot = {
+      teams: mergedTeams,
+      activities: mergedActivities,
+      scores: mergedScores,
+      version: (local.version || 0) + 1,
+    };
+    saveLocalSnapshot(mergedSnap);
+
+    return {
+      teams: mergedTeams,
+      activities: mergedActivities,
+      scores: mergedScores,
+    };
   } catch (err) {
     console.info("Using cached database state:", err);
   }
