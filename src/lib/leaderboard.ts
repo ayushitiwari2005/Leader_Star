@@ -82,8 +82,6 @@ export function computeStandings(
   standings.sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total;
     if (b.boardroom !== a.boardroom) return b.boardroom - a.boardroom;
-    if (b.team.current_capital !== a.team.current_capital)
-      return b.team.current_capital - a.team.current_capital;
     return a.team.team_code.localeCompare(b.team.team_code);
   });
 

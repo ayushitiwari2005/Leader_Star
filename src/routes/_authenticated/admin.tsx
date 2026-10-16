@@ -413,7 +413,6 @@ function TeamsSection({
   const [theme, setTheme] = useState(TRACK_OPTIONS[0]);
   const [teamCode, setTeamCode] = useState("");
   const [members, setMembers] = useState("4");
-  const [capital, setCapital] = useState("100000");
   const [adding, setAdding] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -426,7 +425,6 @@ function TeamsSection({
   const [editTheme, setEditTheme] = useState("");
   const [editCode, setEditCode] = useState("");
   const [editMembers, setEditMembers] = useState("");
-  const [editCapital, setEditCapital] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Bulk Import state
@@ -457,8 +455,8 @@ function TeamsSection({
         acquired_business: business.trim() || undefined,
         team_code: teamCode.trim() || undefined,
         members_count: Number(members) || 4,
-        initial_capital: Number(capital) || 100000,
-        current_capital: Number(capital) || 100000,
+        initial_capital: 0,
+        current_capital: 0,
       });
       toast.success(`Team "${n}" added and saved to database.`);
       setName("");
@@ -479,7 +477,6 @@ function TeamsSection({
     setEditTheme(t.theme);
     setEditCode(t.team_code);
     setEditMembers(String(t.members_count || 4));
-    setEditCapital(String(t.current_capital || t.initial_capital || 100000));
   };
 
   const saveEdit = async (e: React.FormEvent) => {
@@ -498,8 +495,6 @@ function TeamsSection({
         theme: editTheme,
         team_code: editCode.trim() || editingTeam.team_code,
         members_count: Number(editMembers) || 4,
-        current_capital: Number(editCapital) || 100000,
-        initial_capital: Number(editCapital) || 100000,
       });
       toast.success(`Team "${n}" updated successfully in database.`);
       setEditingTeam(null);
@@ -619,7 +614,7 @@ function TeamsSection({
         onSubmit={add}
         className={cn(
           panel,
-          "grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-6 items-end",
+          "grid gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-5 items-end",
         )}
       >
         <div className="space-y-1.5 lg:col-span-2">
@@ -669,22 +664,6 @@ function TeamsSection({
           </select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="team-cap" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-            4. Capital (₹)
-          </Label>
-          <Input
-            id="team-cap"
-            type="number"
-            min={0}
-            step="1000"
-            value={capital}
-            onChange={(e) => setCapital(e.target.value)}
-            placeholder="100000"
-            className="h-11 border-kraft/45 bg-ecru-light/60 font-mono text-sm text-right"
-          />
-        </div>
-
         <div className="space-y-1.5 sm:col-span-1">
           <Label htmlFor="team-code" className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
             Code (Auto)
@@ -714,7 +693,7 @@ function TeamsSection({
           />
         </div>
 
-        <div className="lg:col-span-4 flex items-center justify-end">
+        <div className="lg:col-span-3 flex items-center justify-end">
           <Button
             type="submit"
             disabled={adding}
@@ -792,7 +771,6 @@ function TeamsSection({
               <th className={th}>Code</th>
               <th className={th}>Team & Business / Venture</th>
               <th className={th}>Sector / Track</th>
-              <th className={cn(th, "text-right")}>Capital</th>
               <th className={cn(th, "text-right")}>Members</th>
               <th className={cn(th, "text-right")}>Total Score</th>
               <th className={cn(th, "text-right")}>Rank</th>
@@ -802,7 +780,7 @@ function TeamsSection({
           <tbody className="divide-y divide-kraft/30 font-sans">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center font-mono text-sm text-muted-text">
+                <td colSpan={7} className="px-3 py-8 text-center font-mono text-sm text-muted-text">
                   No teams found. Use the form above to add your actual teams.
                 </td>
               </tr>
@@ -830,9 +808,6 @@ function TeamsSection({
                     <span className="inline-block rounded-xs bg-kraft/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-kraft-deep">
                       {t.theme}
                     </span>
-                  </td>
-                  <td className={cn(td, "text-right font-mono font-bold text-espresso text-sm")}>
-                    {formatCapital(t.current_capital || t.initial_capital || 0)}
                   </td>
                   <td className={cn(td, "text-right font-mono text-xs text-muted-text")}>
                     {t.members_count || 4}
@@ -911,7 +886,7 @@ function TeamsSection({
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
                     Team Code
@@ -919,19 +894,6 @@ function TeamsSection({
                   <Input
                     value={editCode}
                     onChange={(e) => setEditCode(e.target.value)}
-                    className="border-kraft/45 bg-ecru-light/60 font-mono text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="font-mono text-xs uppercase tracking-wider text-muted-text font-bold">
-                    Capital (₹)
-                  </Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="1000"
-                    value={editCapital}
-                    onChange={(e) => setEditCapital(e.target.value)}
                     className="border-kraft/45 bg-ecru-light/60 font-mono text-sm"
                   />
                 </div>
@@ -986,14 +948,14 @@ function TeamsSection({
                 Har line par ek team enter karein format mein:
                 <br />
                 <code className="font-mono font-bold text-espresso bg-kraft/15 px-1 py-0.5 rounded text-[11px]">
-                  Team Name, Business Name, Sector Track, Capital
+                  Team Name, Business Name, Sector Track
                 </code>
               </p>
               <textarea
                 rows={6}
                 value={bulkInput}
                 onChange={(e) => setBulkInput(e.target.value)}
-                placeholder={`NutriSpark, Organic Oat Bars, Food & Nutrition, 150000\nPulseWear, Smart Posture Tracker, Health & Fitness, 120000\nAuraSilk, Vegan Silk Apparel, Fashion & Lifestyle, 100000`}
+                placeholder={`NutriSpark, Organic Oat Bars, Food & Nutrition\nPulseWear, Smart Posture Tracker, Health & Fitness\nAuraSilk, Vegan Silk Apparel, Fashion & Lifestyle`}
                 className="w-full rounded-xs border border-kraft/45 bg-ecru-light/60 p-3 font-mono text-xs text-espresso focus:outline-none focus:ring-1 focus:ring-forest-green"
               />
               <DialogFooter className="pt-2">

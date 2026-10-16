@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Maximize, Search, Trophy, Sparkles } from "lucide-react";
+import { Maximize, Search, Trophy, Crown, Medal, ShieldCheck, Sparkles } from "lucide-react";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { formatScore, formatTime, type Standing } from "@/lib/leaderboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,25 +21,32 @@ function PodiumCard({
 }) {
   const isFirst = place === 1;
   const isSecond = place === 2;
+  const isThird = place === 3;
 
   return (
     <button
       onClick={() => onSelect(standing)}
       className={cn(
-        "paper-card relative overflow-hidden rounded-md p-5 sm:p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl w-full cursor-pointer",
-        isFirst
-          ? "border-2 border-forest-green bg-[#f7f3ea] shadow-[0_4px_16px_-4px_rgba(59,97,58,0.25)] ring-1 ring-forest-green/20"
-          : "border border-kraft/40 bg-[#f4f1ea] shadow-md",
-        isSecond && "md:order-1 md:mt-6",
-        isFirst && "md:order-2",
-        place === 3 && "md:order-3 md:mt-10",
+        "paper-card relative overflow-hidden rounded-md p-5 sm:p-6 text-left transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl w-full cursor-pointer",
+        isFirst &&
+          "border-2 border-amber-500/90 bg-gradient-to-b from-[#fefbf2] via-[#f7f2e6] to-[#f3ebd9] shadow-[0_8px_30px_-6px_rgba(217,119,6,0.35)] ring-2 ring-amber-400/50 md:order-2",
+        isSecond &&
+          "border-2 border-slate-300 bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e8eef5] shadow-lg ring-1 ring-slate-300/70 md:order-1 md:mt-6",
+        isThird &&
+          "border-2 border-amber-700/40 bg-gradient-to-b from-[#fffbeb] via-[#fdf6e7] to-[#f7ebd4] shadow-md ring-1 ring-amber-700/30 md:order-3 md:mt-10",
       )}
     >
-      {/* Decorative top sweep for 1st place */}
+      {/* Decorative top sweep bar */}
       {isFirst && (
-        <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-forest-green">
-          <div className="sweep h-full w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-600">
+          <div className="sweep h-full w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
         </div>
+      )}
+      {isSecond && (
+        <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400" />
+      )}
+      {isThird && (
+        <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-gradient-to-r from-amber-700/70 via-amber-500/50 to-amber-800/80" />
       )}
 
       {/* Rank Header */}
@@ -47,15 +54,18 @@ function PodiumCard({
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em]",
-            isFirst
-              ? "bg-forest-green text-ecru-soft shadow-xs"
-              : "bg-kraft/15 text-kraft-deep",
+            isFirst &&
+              "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm ring-1 ring-amber-300/40",
+            isSecond && "bg-slate-700 text-slate-100 shadow-xs",
+            isThird && "bg-amber-900/90 text-amber-100 shadow-xs",
           )}
         >
-          {isFirst && <Trophy className="size-3" />}
-          Rank 0{place}
+          {isFirst && <Crown className="size-3.5 text-yellow-200 fill-yellow-200" />}
+          {isSecond && <Medal className="size-3.5 text-slate-200" />}
+          {isThird && <Medal className="size-3.5 text-amber-200" />}
+          {isFirst ? "1st · Champion" : isSecond ? "2nd · Runner-Up" : "3rd · Runner-Up"}
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-semibold">
           {standing.team.team_code}
         </span>
       </div>
@@ -64,8 +74,10 @@ function PodiumCard({
       <div className="mt-4 flex items-baseline justify-between">
         <div
           className={cn(
-            "font-heading font-bold leading-none select-none",
-            isFirst ? "text-6xl sm:text-7xl text-forest-green" : "text-5xl sm:text-6xl text-kraft-deep/70",
+            "font-heading font-extrabold leading-none select-none",
+            isFirst && "text-6xl sm:text-7xl text-amber-600 drop-shadow-sm",
+            isSecond && "text-5xl sm:text-6xl text-slate-600",
+            isThird && "text-5xl sm:text-6xl text-amber-900/75",
           )}
         >
           {place}
@@ -77,7 +89,7 @@ function PodiumCard({
           <span
             className={cn(
               "font-mono font-bold leading-none tracking-tight",
-              isFirst ? "text-3xl sm:text-4xl text-espresso" : "text-2xl sm:text-3xl text-espresso",
+              isFirst ? "text-3xl sm:text-4xl text-amber-700" : "text-2xl sm:text-3xl text-espresso",
             )}
           >
             {formatScore(standing.total)}
@@ -90,17 +102,29 @@ function PodiumCard({
         <h3
           className={cn(
             "font-display font-semibold text-espresso break-words line-clamp-2",
-            isFirst ? "text-xl sm:text-2xl" : "text-lg sm:text-xl",
+            isFirst ? "text-xl sm:text-2xl font-bold" : "text-lg sm:text-xl",
           )}
         >
           {standing.team.name}
         </h3>
-        <div className="mt-1 flex items-center justify-between gap-2">
+        {standing.team.acquired_business && (
+          <div className="text-xs text-kraft-deep font-sans font-medium mt-1 truncate">
+            💼 {standing.team.acquired_business}
+          </div>
+        )}
+        <div className="mt-2 flex items-center justify-between gap-2">
           <span className="font-mono text-[10px] sm:text-[11px] uppercase tracking-[0.15em] text-forest-green font-medium truncate">
             {standing.team.theme}
           </span>
-          <span className="inline-flex items-center gap-1 rounded bg-forest-green/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-forest-green font-semibold">
-            Active
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider font-semibold",
+              isFirst
+                ? "bg-amber-500/15 text-amber-700 font-bold"
+                : "bg-forest-green/10 text-forest-green",
+            )}
+          >
+            {isFirst ? "Leader" : "Active"}
           </span>
         </div>
       </div>
@@ -213,7 +237,7 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
             <div className="hidden border border-kraft/35 bg-ecru-soft/80 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-text rounded-xs lg:block">
               Updated {lastUpdated ? formatTime(lastUpdated) : "—"}
             </div>
-            {/* Navigation Switcher: Public | Display */}
+            {/* Navigation Switcher: Public | Display | Admin */}
             <div className="flex items-center gap-1 border border-kraft/40 bg-ecru-soft/80 p-1 rounded-xs shadow-xs">
               <Link
                 to="/"
@@ -236,6 +260,13 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
                 )}
               >
                 Display
+              </Link>
+              <Link
+                to="/admin"
+                className="flex items-center gap-1 bg-kraft/15 hover:bg-forest-green hover:text-ecru-soft px-3 py-1 font-mono text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.15em] text-kraft-deep rounded-xs transition-colors border border-kraft/30"
+              >
+                <ShieldCheck className="size-3.5" />
+                <span>Admin</span>
               </Link>
             </div>
 
@@ -409,36 +440,81 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
 
           {/* Mobile Card List (< 640px) */}
           <div className="sm:hidden space-y-3">
-            {rest.map((s) => (
-              <button
-                key={s.team.id}
-                onClick={() => setSelected(s)}
-                className="w-full text-left p-4 rounded-md border border-kraft/35 bg-ecru-soft shadow-xs transition-colors hover:bg-ecru-light flex items-center justify-between gap-3 cursor-pointer"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <span className="font-mono text-lg font-bold text-kraft-deep shrink-0 w-8">
-                    {String(s.rank).padStart(2, "0")}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="font-display font-semibold text-espresso text-base truncate">
-                      {s.team.name}
+            {filtered.map((s) => {
+              const isRank1 = s.rank === 1;
+              const isRank2 = s.rank === 2;
+              const isRank3 = s.rank === 3;
+              return (
+                <button
+                  key={s.team.id}
+                  onClick={() => setSelected(s)}
+                  className={cn(
+                    "w-full text-left p-4 rounded-md border shadow-xs transition-colors flex items-center justify-between gap-3 cursor-pointer",
+                    isRank1 &&
+                      "border-amber-500/80 bg-gradient-to-r from-amber-500/15 via-[#fefbf2] to-ecru-soft shadow-md",
+                    isRank2 &&
+                      "border-slate-300 bg-gradient-to-r from-slate-200/30 to-ecru-soft",
+                    isRank3 &&
+                      "border-amber-700/40 bg-gradient-to-r from-amber-700/15 to-ecru-soft",
+                    !isRank1 && !isRank2 && !isRank3 && "border-kraft/35 bg-ecru-soft hover:bg-ecru-light",
+                  )}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="shrink-0 w-8">
+                      {isRank1 ? (
+                        <span className="inline-flex items-center justify-center size-8 rounded bg-gradient-to-r from-amber-500 to-amber-600 text-white font-mono text-xs font-black shadow-xs">
+                          <Crown className="size-3.5 fill-yellow-200 text-yellow-200" />
+                        </span>
+                      ) : isRank2 ? (
+                        <span className="inline-flex items-center justify-center size-8 rounded bg-slate-700 text-white font-mono text-xs font-bold shadow-xs">
+                          <Medal className="size-3.5 text-slate-200" />
+                        </span>
+                      ) : isRank3 ? (
+                        <span className="inline-flex items-center justify-center size-8 rounded bg-amber-900/90 text-white font-mono text-xs font-bold shadow-xs">
+                          <Medal className="size-3.5 text-amber-200" />
+                        </span>
+                      ) : (
+                        <span className="font-mono text-lg font-bold text-kraft-deep">
+                          {String(s.rank).padStart(2, "0")}
+                        </span>
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div
+                        className={cn(
+                          "font-display font-semibold text-base truncate",
+                          isRank1 ? "text-amber-950 font-bold" : "text-espresso",
+                        )}
+                      >
+                        {s.team.name}
+                      </div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-muted-text truncate mt-0.5">
+                        {s.team.team_code} · {s.team.theme}
+                      </div>
                     </div>
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-muted-text truncate mt-0.5">
-                      {s.team.team_code} · {s.team.theme}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div
+                      className={cn(
+                        "font-mono font-bold text-base",
+                        isRank1 ? "text-amber-700 font-extrabold" : "text-espresso",
+                      )}
+                    >
+                      {formatScore(s.total)}
+                    </div>
+                    <div
+                      className={cn(
+                        "font-mono text-[10px] uppercase font-semibold mt-0.5",
+                        isRank1 ? "text-amber-700 font-bold" : "text-forest-green",
+                      )}
+                    >
+                      {isRank1 ? "Leader" : "Active"}
                     </div>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="font-mono font-bold text-base text-espresso">
-                    {formatScore(s.total)}
-                  </div>
-                  <div className="font-mono text-[10px] uppercase text-forest-green font-semibold mt-0.5">
-                    Active
-                  </div>
-                </div>
-              </button>
-            ))}
-            {rest.length === 0 && !isLoading && (
+                </button>
+              );
+            })}
+            {filtered.length === 0 && !isLoading && (
               <div className="p-8 text-center font-mono text-sm text-muted-text rounded-md border border-kraft/30 bg-ecru-soft">
                 No teams match your selection.
               </div>
@@ -446,13 +522,12 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
           </div>
 
           {/* Desktop & Display Table (>= 640px) */}
-          {/* Note: Capital & Trends columns completely omitted as requested */}
           <div className="hidden sm:block overflow-x-auto rounded-md border border-kraft/40 bg-ecru-soft shadow-md">
             <div className="min-w-[640px]">
               <div
                 className={cn(
-                  "grid grid-cols-[4rem_1fr_8rem_6rem] gap-4 border-b border-kraft/35 px-6 py-3.5 font-mono uppercase tracking-[0.2em] text-muted-text font-bold",
-                  displayMode ? "text-xs py-4 grid-cols-[5rem_1fr_10rem_7rem]" : "text-[11px]",
+                  "grid grid-cols-[5rem_1fr_8rem_6rem] gap-4 border-b border-kraft/35 px-6 py-3.5 font-mono uppercase tracking-[0.2em] text-muted-text font-bold",
+                  displayMode ? "text-xs py-4 grid-cols-[6rem_1fr_10rem_7rem]" : "text-[11px]",
                 )}
               >
                 <span>Rank</span>
@@ -461,52 +536,100 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
                 <span className="text-right">Status</span>
               </div>
               <div className="divide-y divide-kraft/20">
-                {rest.map((s) => (
-                  <button
-                    key={s.team.id}
-                    onClick={() => setSelected(s)}
-                    className={cn(
-                      "grid w-full grid-cols-[4rem_1fr_8rem_6rem] items-center gap-4 px-6 py-3.5 text-left transition-colors hover:bg-ecru-light/70 cursor-pointer",
-                      displayMode && "grid-cols-[5rem_1fr_10rem_7rem] py-4",
-                    )}
-                  >
-                    <span
+                {filtered.map((s) => {
+                  const isRank1 = s.rank === 1;
+                  const isRank2 = s.rank === 2;
+                  const isRank3 = s.rank === 3;
+                  return (
+                    <button
+                      key={s.team.id}
+                      onClick={() => setSelected(s)}
                       className={cn(
-                        "font-mono font-bold text-kraft-deep",
-                        displayMode ? "text-2xl" : "text-base",
+                        "grid w-full grid-cols-[5rem_1fr_8rem_6rem] items-center gap-4 px-6 py-3.5 text-left transition-all cursor-pointer border-l-4",
+                        displayMode && "grid-cols-[6rem_1fr_10rem_7rem] py-4",
+                        isRank1 &&
+                          "border-amber-500 bg-gradient-to-r from-amber-500/15 via-amber-100/35 to-transparent hover:bg-amber-100/50 shadow-xs",
+                        isRank2 &&
+                          "border-slate-400 bg-gradient-to-r from-slate-300/25 via-slate-100/20 to-transparent hover:bg-slate-200/40",
+                        isRank3 &&
+                          "border-amber-700/60 bg-gradient-to-r from-amber-700/15 via-amber-100/20 to-transparent hover:bg-amber-200/40",
+                        !isRank1 && !isRank2 && !isRank3 && "border-transparent hover:bg-ecru-light/70",
                       )}
                     >
-                      {String(s.rank).padStart(2, "0")}
-                    </span>
-                    <span className="min-w-0">
+                      <span className="font-mono">
+                        {isRank1 ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-sm bg-gradient-to-r from-amber-500 to-amber-600 px-2.5 py-1 font-mono text-xs font-black text-white shadow-xs">
+                            <Crown className="size-3.5 text-yellow-200 fill-yellow-200" />
+                            01
+                          </span>
+                        ) : isRank2 ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-sm bg-slate-700 px-2.5 py-1 font-mono text-xs font-bold text-slate-100 shadow-xs">
+                            <Medal className="size-3.5 text-slate-200" />
+                            02
+                          </span>
+                        ) : isRank3 ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-sm bg-amber-900/90 px-2.5 py-1 font-mono text-xs font-bold text-amber-100 shadow-xs">
+                            <Medal className="size-3.5 text-amber-200" />
+                            03
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              "font-bold text-kraft-deep pl-1",
+                              displayMode ? "text-2xl" : "text-base",
+                            )}
+                          >
+                            {String(s.rank).padStart(2, "0")}
+                          </span>
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span
+                          className={cn(
+                            "block truncate font-display font-semibold",
+                            displayMode ? "text-xl" : "text-base",
+                            isRank1
+                              ? "text-amber-950 font-bold"
+                              : isRank2
+                                ? "text-slate-900 font-semibold"
+                                : isRank3
+                                  ? "text-amber-950 font-semibold"
+                                  : "text-espresso",
+                          )}
+                        >
+                          {s.team.name}
+                        </span>
+                        <span className="block truncate font-mono text-[11px] uppercase tracking-[0.16em] text-muted-text mt-0.5">
+                          {s.team.team_code} · {s.team.theme}
+                          {s.team.acquired_business && (
+                            <span className="text-kraft-deep ml-2">💼 {s.team.acquired_business}</span>
+                          )}
+                        </span>
+                      </span>
                       <span
                         className={cn(
-                          "block truncate font-display font-semibold text-espresso",
-                          displayMode ? "text-xl" : "text-base",
+                          "text-right font-mono font-bold",
+                          displayMode ? "text-2xl" : "text-lg",
+                          isRank1 ? "text-amber-700 font-extrabold" : "text-espresso",
                         )}
                       >
-                        {s.team.name}
+                        {formatScore(s.total)}
                       </span>
-                      <span className="block truncate font-mono text-[11px] uppercase tracking-[0.16em] text-muted-text mt-0.5">
-                        {s.team.team_code} · {s.team.theme}
+                      <span className="text-right">
+                        {isRank1 ? (
+                          <span className="inline-flex items-center rounded-xs bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                            Leader
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-xs bg-forest-green/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-forest-green">
+                            Active
+                          </span>
+                        )}
                       </span>
-                    </span>
-                    <span
-                      className={cn(
-                        "text-right font-mono font-bold text-espresso",
-                        displayMode ? "text-2xl" : "text-lg",
-                      )}
-                    >
-                      {formatScore(s.total)}
-                    </span>
-                    <span className="text-right">
-                      <span className="inline-flex items-center rounded-xs bg-forest-green/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-forest-green">
-                        Active
-                      </span>
-                    </span>
-                  </button>
-                ))}
-                {rest.length === 0 && !isLoading && (
+                    </button>
+                  );
+                })}
+                {filtered.length === 0 && !isLoading && (
                   <div className="px-6 py-10 text-center font-mono text-sm text-muted-text">
                     No teams match your selection.
                   </div>
@@ -518,16 +641,20 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
 
         {/* FOOTER */}
         <footer className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-kraft/35 pt-6 pb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-text text-center sm:text-left">
-          <Link
-            to="/admin"
-            className="flex items-center gap-2 text-inherit hover:opacity-85 transition-opacity cursor-pointer"
-            title="BIZZNNOVATE IIPS DAVV"
-          >
+          <div className="flex items-center gap-2">
             <img src={emblem} alt="" className="size-4 object-contain inline-block" />
             <span>BIZZNNOVATE · IIPS DAVV INDORE</span>
-          </Link>
+          </div>
           <div className="flex items-center gap-3">
             <span>Where Business Meets Innovation · 23–24 October 2026</span>
+            <span className="text-kraft/40">·</span>
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-1 text-forest-green hover:text-forest-dark font-semibold tracking-wider hover:underline"
+            >
+              <ShieldCheck className="size-3" />
+              <span>Admin Console</span>
+            </Link>
           </div>
         </footer>
       </div>
