@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Maximize, Search, Trophy, Sparkles } from "lucide-react";
 import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { formatScore, formatTime, type Standing } from "@/lib/leaderboard";
@@ -109,10 +109,26 @@ function PodiumCard({
 }
 
 export function LeaderboardView({ displayMode = false }: { displayMode?: boolean }) {
+  const navigate = useNavigate();
   const { standings, activities, lastUpdated, liveFlash, isLoading } = useLeaderboard();
   const [query, setQuery] = useState("");
   const [themeFilter, setThemeFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Standing | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Secret organizer shortcut: Alt + A or Ctrl + Shift + A
+      if (
+        (e.altKey && e.key.toLowerCase() === "a") ||
+        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "a")
+      ) {
+        e.preventDefault();
+        void navigate({ to: "/admin" });
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
 
   const themes = useMemo(
     () => Array.from(new Set(standings.map((s) => s.team.theme))),
@@ -502,10 +518,14 @@ export function LeaderboardView({ displayMode = false }: { displayMode?: boolean
 
         {/* FOOTER */}
         <footer className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-kraft/35 pt-6 pb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-text text-center sm:text-left">
-          <div className="flex items-center gap-2">
+          <Link
+            to="/admin"
+            className="flex items-center gap-2 text-inherit hover:opacity-85 transition-opacity cursor-pointer"
+            title="BIZZNNOVATE IIPS DAVV"
+          >
             <img src={emblem} alt="" className="size-4 object-contain inline-block" />
             <span>BIZZNNOVATE · IIPS DAVV INDORE</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <span>Where Business Meets Innovation · 23–24 October 2026</span>
           </div>
